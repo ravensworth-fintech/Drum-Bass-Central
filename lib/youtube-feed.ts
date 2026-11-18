@@ -1,10 +1,10 @@
 // YouTube channels publish a free public Atom feed (newest ~15 uploads). No API key or quota needed.
-export type FeedEntry = { videoId: string; title: string; publishedAt: string | null };
+export type FeedEntry = { videoId: string; title: string; publishedAt: string | null; isShort: boolean; description: string };
 export type ParsedTrack = { artist: string; title: string; suspicious: boolean };
 
 const UA = "Mozilla/5.0 (compatible; dnb-discover/1.0)";
 
-function decode(s: string) {
+export function decode(s: string) {
   return s
     .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
@@ -43,7 +43,8 @@ export async function fetchChannelFeed(channelId: string): Promise<FeedEntry[]> 
     const videoId = e.match(/<yt:videoId>([^<]+)</)?.[1];
     const title = e.match(/<title>([\s\S]*?)<\/title>/)?.[1];
     if (!videoId || !title) continue;
-    out.push({ videoId, title: decode(title).trim(), publishedAt: e.match(/<published>([^<]+)</)?.[1] ?? null });
+    const href = e.match(/<link[^>]*rel="alternate"[^>]*href="([^"]+)"/)?.[1] ?? "";
+    out.push({ videoId, title: decode(title).trim(), publishedAt: e.match(/<published>([^<]+)</)?.[1] ?? null, isShort: href.includes("/shorts/"), description: decode(e.match(/<media:description>([\s\S]*?)<\/media:description>/)?.[1] ?? "") });
   }
   return out;
 }
@@ -60,8 +61,12 @@ const PROMO = /\s*(?:[-–—|]\s*)?(?:\bis\s+)?\b(?:out now|available now|pre-?
 const SUSPICIOUS_ARTIST = /@|\bid:|\byears of\b|\b(?:vol\.?|volume|episode|session|sessions|takeover|presents|festival|tour|live)\b/i;
 
 /** "Artist - Title (Official Video) #dnb" -> { artist, title }. Returns null when unsure; suspicious=true means "send to review". */
-export function parseTrack(raw: string): ParsedTrack | null {
+/** Shorts captions are stuffed with hashtags ("... #dnb #newmusic #drumandbass"). Real uploads rarely have two or more in the title. */
+export const looksLikeShort = (raw: string) => /#shorts?\b/i.test(raw) || (raw.match(/#[^\s#]+/g) ?? []).length >= 2;
+
+export function parseTrack(raw: string, keepShorts = false): ParsedTrack | null {
   if (NOT_A_TRACK.test(raw)) return null;
+  if (!keepShorts && looksLikeShort(raw)) return null;
   let t = raw.replace(EMOJI, " ").replace(HASHTAGS, "").replace(PROMO, "").replace(/\s+/g, " ").trim();
   t = t.replace(/\s*[(\[]([^)\]]*)[)\]]/g, (m, inner: string) => (NOISE.test(inner) ? "" : m)).trim();
   t = t.replace(/\s*(\||\/\/)\s*[^|]*$/, "").trim(); // trailing "| Label"
@@ -81,4 +86,22 @@ export function normKey(artist: string, title: string): string {
   const names = artist.split(/\b(?:feat\.?|ft\.?|featuring)\b/i)[0].split(/\s*(?:,|&|\+|\bx\b|\band\b|\bvs\.?)\s*/i).map(fold).filter(Boolean);
   const t = fold(title.replace(/\s*[(\[]\s*(?:feat|ft|featuring)\b[^)\]]*[)\]]/gi, ""));
   return `${Array.from(new Set(names)).sort().join(",")}|${t}`;
+}
+
+/** Video lengths in seconds from the official YouTube Data API (videos.list, 1 quota unit per 50 videos). */
+export async function fetchDurations(ids: string[], apiKey: string): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50);
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${batch.join(",")}&key=${apiKey}`, {
+      signal: AbortSignal.timeout(12000), cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`YouTube Data API returned HTTP ${res.status}. Check YOUTUBE_API_KEY and that the YouTube Data API v3 is enabled.`);
+    const json = await res.json();
+    for (const it of json.items ?? []) {
+      const m = String(it.contentDetails?.duration ?? "").match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+      if (m) out.set(it.id as string, Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0));
+    }
+  }
+  return out;
 }

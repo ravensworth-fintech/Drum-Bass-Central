@@ -8,6 +8,7 @@ import { isYT, usePlayer } from "./PlayerProvider";
 export type Track = {
   id: string; title: string; artist_name: string; subgenre: string;
   artwork_url: string | null; source_url: string; embed_url: string | null; released_on: string | null; source_name: string | null;
+  duration_seconds?: number | null;
 };
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -18,19 +19,25 @@ export function fmtDate(s: string | null): string | null {
   return Number(m[1]) === new Date().getFullYear() ? base : `${base} ${m[1]}`;
 }
 
+export function fmtDur(sec: number | null | undefined): string | null {
+  if (!sec || sec < 1) return null;
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), r = Math.floor(sec % 60);
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}` : `${m}:${String(r).padStart(2, "0")}`;
+}
+
 /** Opens SoundCloud's own search page. No API key needed. */
 export const scSearchUrl = (q: string) => `https://soundcloud.com/search/sounds?q=${encodeURIComponent(q)}`;
 
 const chip = "shrink-0 border border-white/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50 hover:border-[#c6ff00] hover:text-[#c6ff00]";
 
-export function TrackRow({ t, leading, extra, action, queue }: {
-  t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode; queue: Track[];
+export function TrackRow({ t, leading, extra, action, queue, below, noSC }: {
+  t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode; queue: Track[]; below?: React.ReactNode; noSC?: boolean;
 }) {
   const { current, playing, play, toggle } = usePlayer();
   const isCur = current?.id === t.id;
   const li = useRef<HTMLLIElement>(null);
   useEffect(() => { if (isCur) li.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [isCur]);
-  const meta = [t.subgenre !== "Unknown" ? t.subgenre : null, t.source_name, fmtDate(t.released_on), extra].filter(Boolean).join(" · ");
+  const meta = [fmtDur(t.duration_seconds), t.subgenre !== "Unknown" ? t.subgenre : null, t.source_name, fmtDate(t.released_on), extra].filter(Boolean).join(" · ");
   return (
     <li ref={li} className={`py-2 ${isCur ? "bg-white/5" : ""}`}>
       <div className="flex items-center gap-3">
@@ -47,10 +54,11 @@ export function TrackRow({ t, leading, extra, action, queue }: {
           <div className="truncate text-xs text-white/40 md:hidden">{meta}</div>
         </div>
         <span className="hidden max-w-[22rem] shrink-0 truncate text-xs text-white/40 md:block">{meta}</span>
-        <a href={scSearchUrl(`${t.artist_name} ${t.title}`)} target="_blank" rel="noreferrer" title="Search on SoundCloud" className={chip}>SC</a>
+        {!noSC && <a href={scSearchUrl(`${t.artist_name} ${t.title}`)} target="_blank" rel="noreferrer" title="Search on SoundCloud" className={chip}>SC</a>}
         <a href={t.source_url} target="_blank" rel="noreferrer" title="Open original" className={chip}>{t.source_url.includes("youtube") ? "YT" : "↗"}</a>
         {action}
       </div>
+      {below}
     </li>
   );
 }

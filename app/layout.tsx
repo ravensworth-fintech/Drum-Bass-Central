@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AuthNav } from "@/components/AuthNav";
 import { PlayerProvider } from "@/components/PlayerProvider";
 export const metadata = { title: "D&B Discover" };
-const nav = [["/", "Discover"], ["/tracks", "Tracks"], ["/liked", "Liked Tracks"]];
+const nav = [["/", "Discover"], ["/tracks", "Tracks"], ["/mixes", "Mixes"], ["/liked", "Liked Tracks"]];
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en"><body><PlayerProvider>
