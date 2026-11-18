@@ -80,18 +80,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     cur.current = null; setCurrent(null); setPlaying(false);
   };
 
-  const btn = "px-1 text-white/70 hover:text-[#c6ff00]";
+  const skip = "flex h-12 w-12 items-center justify-center text-2xl text-white/80 hover:text-[#c6ff00]";
   return (
     <PlayerCtx.Provider value={{ current, playing, play, toggle }}>
       {children}
-      <div className={`fixed bottom-3 right-3 z-50 w-60 border border-white/15 bg-black shadow-xl ${current ? "" : "hidden"}`}>
-        <div className="relative aspect-video w-full bg-black"><div ref={host} className="absolute inset-0" /></div>
-        <div className="flex items-center gap-1 px-2 py-1.5 text-xs">
-          <div className="min-w-0 flex-1 truncate"><span className="font-semibold">{current?.title}</span><span className="text-white/60"> – {current?.artist_name}</span></div>
-          <button onClick={() => stepRef.current(-1)} aria-label="Previous track" className={btn}>⏮</button>
-          <button onClick={toggle} aria-label={playing ? "Pause" : "Play"} className={btn}>{playing ? "⏸" : "▶"}</button>
-          <button onClick={() => stepRef.current(1)} aria-label="Next track" className={btn}>⏭</button>
-          <button onClick={close} aria-label="Close player" className={btn}>✕</button>
+      {current && <div className="h-28" />} {/* keeps the last rows clear of the bar */}
+      <div className={`fixed inset-x-0 bottom-0 z-50 border-t border-white/15 bg-black/95 backdrop-blur ${current ? "" : "hidden"}`}>
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2 sm:gap-5">
+          <div className="relative aspect-video w-28 shrink-0 bg-black sm:w-44"><div ref={host} className="absolute inset-0" /></div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold sm:text-base">{current?.title}</div>
+            <div className="truncate text-xs text-white/60 sm:text-sm">{current?.artist_name}</div>
+          </div>
+          <button onClick={() => stepRef.current(-1)} aria-label="Previous track" className={skip}>⏮</button>
+          <button onClick={toggle} aria-label={playing ? "Pause" : "Play"}
+            className="flex h-14 w-14 shrink-0 items-center justify-center bg-[#c6ff00] text-2xl text-black hover:bg-white">{playing ? "⏸" : "▶"}</button>
+          <button onClick={() => stepRef.current(1)} aria-label="Next track" className={skip}>⏭</button>
+          <button onClick={close} aria-label="Close player" className="ml-1 px-2 text-lg text-white/40 hover:text-white">✕</button>
         </div>
       </div>
     </PlayerCtx.Provider>
