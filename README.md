@@ -1,0 +1,28 @@
+# D&B Discovery Platform
+
+## Architecture
+Next.js (App Router) + Tailwind on Vercel; Supabase Postgres/Auth/RLS; ingestion as separate connector
+modules (one per source kind) run by Supabase scheduled functions (pg_cron -> Edge Function) every 3h.
+Each connector writes to `scan_history`; one failing source never stops the others.
+Dedupe order: canonical URL -> (platform, platform_id) -> artist|title key. High-confidence items
+auto-publish; uncertain ones stay `pending` / `tracklist_candidates` for admin review.
+
+## Integration status (honest view)
+| Source | Status |
+|---|---|
+| RSS (UKF, DnBArena, Bassblog, label blogs), Mixcloud public API, BBC programme feeds | Planned: fully automatic, no credentials |
+| YouTube | Needs free Data API key |
+| Spotify | Needs client credentials (metadata + embeds only) |
+| SoundCloud | Embeds work; discovery depends on API access, which SoundCloud limits. Per-profile RSS where available, else manual URL |
+| Bandcamp | No public API; embeds + manual/RSS-where-offered |
+| 1001Tracklists | No public API; scraping not assumed. Workflow: manual tracklist URL submission + permitted metadata |
+| Kool FM, Rinse FM, Mi-Soul | Depends on each show's podcast/Mixcloud feed; verify per show |
+
+## Setup
+1. Create a Supabase project, run `supabase/schema.sql`.
+2. Env: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (server only), YOUTUBE_API_KEY, SPOTIFY_CLIENT_ID/SECRET.
+3. `npm i jspdf @supabase/ssr @supabase/supabase-js`
+
+## PDF export
+`<DownloadPdfButton title="New Releases" tracks={visibleTracks} />` on any list page. Exports numbered
+"Artist - Title" lines for what's currently shown (filters applied). Non-Latin titles may not render with the built-in font.
