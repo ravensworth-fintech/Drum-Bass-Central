@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { Track, TrackRow, nextPlayable } from "@/components/TrackList";
+import { Track, TrackRow } from "@/components/TrackList";
 import { DownloadPdfButton } from "@/components/DownloadPdfButton";
 
 type Row = { liked_at: string; tracks: Track };
@@ -16,7 +16,6 @@ const SORTS: { key: SortKey; label: string }[] = [
 
 export default function LikedClient() {
   const [rows, setRows] = useState<Row[] | null>(null);
-  const [playing, setPlaying] = useState<string | null>(null);
   const [authed, setAuthed] = useState(true);
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
@@ -137,9 +136,7 @@ export default function LikedClient() {
         {shown.map((r) => {
           const on = sel.has(r.tracks.id);
           return (
-            <TrackRow key={r.tracks.id} t={r.tracks} open={playing === r.tracks.id}
-              onToggle={() => setPlaying(playing === r.tracks.id ? null : r.tracks.id)}
-              onEnded={() => setPlaying(nextPlayable(shown.map((x) => x.tracks), r.tracks.id))} extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
+            <TrackRow key={r.tracks.id} t={r.tracks} queue={shown.map((x) => x.tracks)} extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
               leading={
                 <button onClick={() => toggle(r.tracks.id)} aria-pressed={on} aria-label={on ? "Deselect track" : "Select track"}
                   className={`h-6 w-6 shrink-0 border text-sm font-bold leading-none ${on ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/30"}`}>
