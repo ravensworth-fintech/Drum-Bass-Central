@@ -1,5 +1,6 @@
 import "./globals.css";
 import Link from "next/link";
+import { AuthNav } from "@/components/AuthNav";
 export const metadata = { title: "D&B Discover" };
 const nav = [["/", "Discover"], ["/tracks", "Tracks"], ["/liked", "Liked Tracks"]];
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -10,7 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {nav.map(([href, label]) => (
           <Link key={href} href={href} className="text-sm uppercase tracking-widest text-white/70 hover:text-white">{label}</Link>
         ))}
-        <Link href="/login" className="ml-auto text-sm text-white/50 hover:text-white">Sign in</Link>
+        <AuthNav />
       </header>
       <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
     </body></html>

@@ -6,7 +6,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [msg, setMsg] = useState("");
   async function submit() {
-    const { error } = await createClient().auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+    const { error } = await createClient().auth.signInWithOtp({ email, options: { emailRedirectTo: `${window.location.origin}/auth/callback` } });
     setMsg(error ? error.message : "Check your email for the sign-in link.");
   }
   return (
