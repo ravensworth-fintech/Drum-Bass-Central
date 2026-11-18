@@ -4,9 +4,9 @@ import { createClient } from "@/lib/supabase-browser";
 
 export function LikeButton({ trackId, initiallyLiked }: { trackId: string; initiallyLiked: boolean }) {
   const [liked, setLiked] = useState(initiallyLiked);
-  const supabase = createClient();
 
   async function toggle() {
+    const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return (window.location.href = "/login");
     const next = !liked;
