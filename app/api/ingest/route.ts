@@ -19,6 +19,11 @@ async function scanSource(sb: ReturnType<typeof admin>, src: Source) {
     const entries = await fetchChannelFeed(channelId);
     found = entries.length;
 
+    // Backfill: tag tracks added before source_name existed.
+    if (entries.length) {
+      await sb.from("tracks").update({ source_name: src.name }).eq("platform", "youtube").in("platform_id", entries.map((e) => e.videoId)).is("source_name", null);
+    }
+
     const rows = entries.flatMap((e) => {
       const p = parseTrack(e.title);
       if (!p) { skipped++; return []; }
@@ -32,6 +37,7 @@ async function scanSource(sb: ReturnType<typeof admin>, src: Source) {
         artwork_url: `https://i.ytimg.com/vi/${e.videoId}/hqdefault.jpg`,
         released_on: e.publishedAt ? e.publishedAt.slice(0, 10) : null,
         status: "published",
+        source_name: src.name,
       }];
     });
 

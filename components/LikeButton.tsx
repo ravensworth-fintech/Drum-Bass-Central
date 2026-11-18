@@ -14,7 +14,7 @@ export function LikeButton({ trackId, initiallyLiked }: { trackId: string; initi
     const { error } = next
       ? await supabase.from("liked_tracks").insert({ user_id: user.id, track_id: trackId }) // liked_at defaults to now()
       : await supabase.from("liked_tracks").delete().match({ user_id: user.id, track_id: trackId });
-    if (error && error.code !== "23505") setLiked(!next); // 23505 = already liked, fine
+    if (error && error.code !== "23505") { setLiked(!next); alert(`Could not save your like: ${error.message}`); } // 23505 = already liked, fine
   }
   return (
     <button onClick={toggle} aria-pressed={liked} aria-label={liked ? "Unlike" : "Like"}

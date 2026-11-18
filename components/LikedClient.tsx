@@ -11,12 +11,14 @@ export default function LikedClient() {
   const [authed, setAuthed] = useState(true);
   const [newestFirst, setNewestFirst] = useState(true);
   const [q, setQ] = useState("");
+  const [err, setErr] = useState("");
 
   async function load() {
     const supabase = createClient();
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) { setAuthed(false); return; }
-    const { data } = await supabase.from("liked_tracks").select("liked_at, tracks(*)").order("liked_at", { ascending: !newestFirst });
+    const { data, error } = await supabase.from("liked_tracks").select("liked_at, tracks(*)").order("liked_at", { ascending: !newestFirst });
+    if (error) setErr(error.message);
     setRows((data ?? []) as unknown as Row[]);
   }
   useEffect(() => { load(); }, [newestFirst]); // eslint-disable-line
@@ -38,6 +40,7 @@ export default function LikedClient() {
         <button onClick={() => setNewestFirst(!newestFirst)} className="border border-white/20 px-3 py-1.5 text-xs uppercase tracking-widest">{newestFirst ? "Newest liked first" : "Oldest liked first"}</button>
         <DownloadPdfButton title="Liked Tracks" tracks={shown.map((r) => ({ artist: r.tracks.artist_name, title: r.tracks.title }))} />
       </div>
+      {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {rows && !shown.length && <p className="text-white/50">Nothing here yet.</p>}
       <ul className="divide-y divide-white/10">
         {shown.map((r) => (
@@ -47,7 +50,7 @@ export default function LikedClient() {
               <div className="truncate font-semibold">{r.tracks.title}</div>
               <div className="truncate text-sm text-white/60">{r.tracks.artist_name} · {r.tracks.subgenre} · liked {new Date(r.liked_at).toLocaleString()}</div>
             </div>
-            <a href={r.tracks.source_url} target="_blank" rel="noreferrer" className="text-xs text-white/40 hover:text-white">Source</a>
+            <a href={r.tracks.source_url} target="_blank" rel="noreferrer" className="text-xs text-white/40 hover:text-white">{r.tracks.source_name ? `${r.tracks.source_name} ↗` : "Source ↗"}</a>
             <button onClick={() => unlike(r.tracks.id)} className="text-[#c6ff00]" aria-label="Unlike">♥</button>
           </li>
         ))}

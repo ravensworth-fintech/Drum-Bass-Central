@@ -7,7 +7,7 @@ export const fetchCache = "force-no-store";
 export default async function Tracks() {
   let tracks: Track[] = [], error = "";
   try {
-    const { data, error: e } = await db().from("tracks").select("*").order("released_on", { ascending: false, nullsFirst: false }).limit(100);
+    const { data, error: e } = await db().from("tracks").select("*").order("released_on", { ascending: false, nullsFirst: false }).limit(30);
     if (e) error = e.message; else tracks = (data ?? []) as Track[];
   } catch (e) { error = String(e); }
   return (
