@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export default async function Discover() {
   let tracks: Track[] = [], error = "";
   try {
-    const { data, error: e } = await db().from("tracks").select("*").order("created_at", { ascending: false }).limit(30);
+    const { data, error: e } = await db().from("tracks").select("*").order("released_on", { ascending: false, nullsFirst: false }).limit(30);
     if (e) error = e.message; else tracks = (data ?? []) as Track[];
   } catch (e) { error = String(e); }
   return (

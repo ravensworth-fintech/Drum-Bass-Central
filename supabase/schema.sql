@@ -128,3 +128,11 @@ create policy "public read" on labels   for select using (true);
 create policy "public read" on releases for select using (true);
 -- sources, scan_history, tracklist_candidates, and all writes: no policies = no access for anon/users.
 -- Ingestion and the admin pages use the service-role key on the server, which bypasses RLS.
+
+-- Table privileges for the Data API roles. RLS policies only filter rows; the role still needs GRANT first.
+-- (Without these you get "permission denied for table ..." instead of an empty result.)
+grant usage on schema public to anon, authenticated, service_role;
+grant select on tracks, mixes, articles, tracklist_entries, artists, labels, releases to anon, authenticated;
+grant select on profiles to authenticated;
+grant select, insert, delete on liked_tracks to authenticated;
+grant all on all tables in schema public to service_role;

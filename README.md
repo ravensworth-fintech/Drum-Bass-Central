@@ -26,3 +26,10 @@ auto-publish; uncertain ones stay `pending` / `tracklist_candidates` for admin r
 ## PDF export
 `<DownloadPdfButton title="New Releases" tracks={visibleTracks} />` on any list page. Exports numbered
 "Artist - Title" lines for what's currently shown (filters applied). Non-Latin titles may not render with the built-in font.
+
+## Ingestion (YouTube, no API key needed)
+`/api/ingest` reads each enabled `youtube` row in `sources` via the channel's free public feed, turns
+"Artist - Title" uploads into published tracks (with embed + thumbnail), skips mixes/podcasts/unparseable titles,
+dedupes, and logs to `scan_history`. Needs env vars `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET` (any long random string).
+Run it by hand: `https://YOUR-SITE.vercel.app/api/ingest?secret=YOUR_CRON_SECRET`. Vercel Cron calls it daily (`vercel.json`).
+Add channels by inserting rows into `sources` (see `supabase/seed_sources.sql`).
