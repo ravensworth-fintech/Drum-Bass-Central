@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { Track } from "@/components/TrackList";
+import { Track, TrackRow } from "@/components/TrackList";
 import { DownloadPdfButton } from "@/components/DownloadPdfButton";
 
 type Row = { liked_at: string; tracks: Track };
@@ -136,22 +136,14 @@ export default function LikedClient() {
         {shown.map((r) => {
           const on = sel.has(r.tracks.id);
           return (
-            <li key={r.tracks.id} className="flex items-center gap-4 py-3">
-              <button onClick={() => toggle(r.tracks.id)} aria-pressed={on} aria-label={on ? "Deselect track" : "Select track"}
-                className={`h-6 w-6 shrink-0 border text-sm font-bold leading-none ${on ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/30"}`}>
-                {on ? "✓" : ""}
-              </button>
-              {r.tracks.artwork_url ? <img src={r.tracks.artwork_url} alt="" loading="lazy" className="h-14 w-14 object-cover" /> : <div className="h-14 w-14 bg-white/10" />}
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">{r.tracks.title}</div>
-                <div className="truncate text-sm text-white/60">
-                  {r.tracks.artist_name} · {r.tracks.subgenre}
-                  {r.tracks.released_on ? ` · posted ${r.tracks.released_on}` : ""} · liked {new Date(r.liked_at).toLocaleDateString()}
-                </div>
-              </div>
-              <a href={r.tracks.source_url} target="_blank" rel="noreferrer" className="text-xs text-white/40 hover:text-white">{r.tracks.source_name ? `${r.tracks.source_name} ↗` : "Source ↗"}</a>
-              <button onClick={() => unlike(r.tracks.id)} className="text-[#c6ff00]" aria-label="Unlike">♥</button>
-            </li>
+            <TrackRow key={r.tracks.id} t={r.tracks} extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
+              leading={
+                <button onClick={() => toggle(r.tracks.id)} aria-pressed={on} aria-label={on ? "Deselect track" : "Select track"}
+                  className={`h-6 w-6 shrink-0 border text-sm font-bold leading-none ${on ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/30"}`}>
+                  {on ? "✓" : ""}
+                </button>
+              }
+              action={<button onClick={() => unlike(r.tracks.id)} className="text-[#c6ff00]" aria-label="Unlike">♥</button>} />
           );
         })}
       </ul>

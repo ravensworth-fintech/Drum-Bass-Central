@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { TrackList, Track } from "@/components/TrackList";
+import { TrackList, Track, scSearchUrl } from "@/components/TrackList";
 
 const PAGE = 30;
 
@@ -69,6 +69,10 @@ export function TracksBrowser({ initial, channels }: { initial: Track[]; channel
           <option value="">All channels</option>
           {channels.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
+        {q.trim() && (
+          <a href={scSearchUrl(q.trim())} target="_blank" rel="noreferrer"
+            className="border border-white/20 px-3 py-1.5 text-xs uppercase tracking-widest hover:border-[#c6ff00] hover:text-[#c6ff00]">Search SoundCloud ↗</a>
+        )}
         {loading && <span className="text-xs text-white/50">Loading…</span>}
       </div>
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}

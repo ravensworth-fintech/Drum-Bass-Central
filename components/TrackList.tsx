@@ -9,6 +9,51 @@ export type Track = {
   artwork_url: string | null; source_url: string; embed_url: string | null; released_on: string | null; source_name: string | null;
 };
 
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export function fmtDate(s: string | null): string | null {
+  const m = s?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const base = `${Number(m[3])} ${MON[Number(m[2]) - 1]}`;
+  return Number(m[1]) === new Date().getFullYear() ? base : `${base} ${m[1]}`;
+}
+
+/** Opens SoundCloud's own search page. No API key needed. */
+export const scSearchUrl = (q: string) => `https://soundcloud.com/search/sounds?q=${encodeURIComponent(q)}`;
+
+const chip = "shrink-0 border border-white/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50 hover:border-[#c6ff00] hover:text-[#c6ff00]";
+
+export function TrackRow({ t, leading, extra, action }: { t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const meta = [t.subgenre !== "Unknown" ? t.subgenre : null, t.source_name, fmtDate(t.released_on), extra].filter(Boolean).join(" · ");
+  const src = t.embed_url ? `${t.embed_url}${t.embed_url.includes("?") ? "&" : "?"}autoplay=1` : "";
+  return (
+    <li className="py-2">
+      <div className="flex items-center gap-3">
+        {leading}
+        <button onClick={() => t.embed_url && setOpen(!open)} disabled={!t.embed_url} aria-label={open ? "Close player" : "Play"}
+          className="group relative h-11 w-11 shrink-0 overflow-hidden bg-white/10">
+          {t.artwork_url && <img src={t.artwork_url} alt="" loading="lazy" className="h-full w-full object-cover" />}
+          {t.embed_url && (
+            <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-sm group-hover:bg-black/60 group-hover:text-[#c6ff00]">{open ? "✕" : "▶"}</span>
+          )}
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm"><span className="font-semibold">{t.title}</span><span className="text-white/60"> – {t.artist_name}</span></div>
+          <div className="truncate text-xs text-white/40 md:hidden">{meta}</div>
+        </div>
+        <span className="hidden max-w-[22rem] shrink-0 truncate text-xs text-white/40 md:block">{meta}</span>
+        <a href={scSearchUrl(`${t.artist_name} ${t.title}`)} target="_blank" rel="noreferrer" title="Search on SoundCloud" className={chip}>SC</a>
+        <a href={t.source_url} target="_blank" rel="noreferrer" title="Open original" className={chip}>{t.source_url.includes("youtube") ? "YT" : "↗"}</a>
+        {action}
+      </div>
+      {open && t.embed_url && (
+        <iframe src={src} title={`${t.artist_name} - ${t.title}`} loading="lazy" className="mt-2 aspect-video w-full max-w-md border-0"
+          allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />
+      )}
+    </li>
+  );
+}
+
 export function TrackList({ tracks, title }: { tracks: Track[]; title: string }) {
   const [liked, setLiked] = useState<Set<string>>(new Set());
   useEffect(() => {
@@ -25,26 +70,12 @@ export function TrackList({ tracks, title }: { tracks: Track[]; title: string })
 
   return (
     <div>
-      <div className="mb-4 flex justify-end">
+      <div className="mb-3 flex justify-end">
         <DownloadPdfButton title={title} tracks={tracks.map((t) => ({ artist: t.artist_name, title: t.title }))} />
       </div>
       <ul className="divide-y divide-white/10">
         {tracks.map((t) => (
-          <li key={t.id} className="py-4">
-            <div className="flex items-center gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">{t.title}</div>
-                <div className="truncate text-sm text-white/60">{t.artist_name} · {t.subgenre}{t.released_on ? ` · ${t.released_on}` : ""}</div>
-              </div>
-              <a href={t.source_url} target="_blank" rel="noreferrer" className="text-xs text-white/40 hover:text-white">{t.source_name ? `${t.source_name} ↗` : "Source ↗"}</a>
-              <LikeButton key={t.id + liked.has(t.id)} trackId={t.id} initiallyLiked={liked.has(t.id)} />
-            </div>
-            {t.embed_url ? (
-              <iframe src={t.embed_url} title={`${t.artist_name} - ${t.title}`} loading="lazy" className="mt-3 aspect-video w-full max-w-md border-0" allow="encrypted-media; picture-in-picture" allowFullScreen />
-            ) : t.artwork_url ? (
-              <img src={t.artwork_url} alt="" loading="lazy" className="mt-3 h-24 w-24 object-cover" />
-            ) : null}
-          </li>
+          <TrackRow key={t.id} t={t} action={<LikeButton key={t.id + liked.has(t.id)} trackId={t.id} initiallyLiked={liked.has(t.id)} />} />
         ))}
       </ul>
     </div>
