@@ -33,3 +33,15 @@ auto-publish; uncertain ones stay `pending` / `tracklist_candidates` for admin r
 dedupes, and logs to `scan_history`. Needs env vars `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET` (any long random string).
 Run it by hand: `https://YOUR-SITE.vercel.app/api/ingest?secret=YOUR_CRON_SECRET`. Vercel Cron calls it daily (`vercel.json`).
 Add channels by inserting rows into `sources` (see `supabase/seed_sources.sql`).
+
+## Cleanup and review queue
+Ingestion strips hashtags and promo text ("out now", emoji), builds a `norm_key` (ignores case, punctuation, artist order,
+"&" vs ",", "(ft. X)") to skip duplicates across channels, and holds tracks whose artist looks like an event or caption as
+`status = 'pending'` (hidden from the site). Approve one by setting its status to `published` in Table Editor -> tracks.
+One-off tidy of existing rows (run once, after `supabase/add_norm_key.sql`): `/api/ingest?secret=YOUR_CRON_SECRET&cleanup=1`.
+Duplicates are hidden (`rejected`), never deleted, and any likes on them move to the kept track.
+
+## Login
+Password sign-in, account creation, and email link/code. Supabase -> Authentication -> URL Configuration: set Site URL to your
+Vercel address and add `https://YOUR-SITE.vercel.app/**` under Redirect URLs. For instant sign-up, turn off "Confirm email"
+under Providers -> Email.
