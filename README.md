@@ -70,3 +70,6 @@ It uses your sign-in (`/api/run-ingest`), so no secret goes in the address bar. 
 ADD + accepts a `soundcloud.com/artist` link (or a `feeds.soundcloud.com/users/soundcloud:users:ID/sounds.rss` link). The account becomes a `soundcloud` source and is scanned
 through its public RSS feed (newest uploads only), with the same track/mix sorting and de-duplication as YouTube. SoundCloud tracks play in the site's player through SoundCloud's
 official Widget API. SoundCloud mixes get no automatic tracklist lookup (that job reads YouTube comments).
+
+## Day dividers
+Track tabs (Discover, D&B, House, Bands) group songs under a thin dated line by release date; Mixes group by upload date; Likes group by date liked or date posted (when sorted by either).

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { Track, TrackRow } from "@/components/TrackList";
+import { DayDivider, Track, TrackRow, dayKey } from "@/components/TrackList";
 import { Mix, MixTracklist } from "@/components/MixTracklist";
 import { Genre, GenreToggle } from "@/components/GenreToggle";
 
@@ -90,7 +90,13 @@ export function MixesBrowser({ initial, channels }: { initial: Mix[]; channels: 
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {mixes.length ? (
         <ul className="divide-y divide-white/10">
-          {mixes.map((m, i) => <TrackRow key={m.id} t={queue[i]} queue={queue} noSC showGenre={!genre} action={null} below={<MixTracklist mix={m} />} />)}
+          {mixes.flatMap((m, i) => {
+            const day = dayKey(m.uploaded_at);
+            const rows: React.ReactNode[] = [];
+            if (day && day !== (i ? dayKey(mixes[i - 1].uploaded_at) : null)) rows.push(<DayDivider key={`day-${day}-${i}`} day={day} />);
+            rows.push(<TrackRow key={m.id} t={queue[i]} queue={queue} noSC showGenre={!genre} action={null} below={<MixTracklist mix={m} />} />);
+            return rows;
+          })}
         </ul>
       ) : (
         !loading && <p className="text-white/50">{q || channel || genre || onlyTl ? "No mixes match that search." : "No mixes yet. They appear after the next scan."}</p>

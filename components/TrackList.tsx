@@ -25,6 +25,26 @@ export function fmtDur(sec: number | null | undefined): string | null {
   return h ? `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}` : `${m}:${String(r).padStart(2, "0")}`;
 }
 
+/** "2026-11-17..." -> "2026-11-17", or null when there is no usable date. */
+export const dayKey = (s: string | null | undefined): string | null => s?.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? null;
+
+const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function dayLabel(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const wd = WEEKDAY[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${wd} ${d} ${MON[m - 1]}${y === new Date().getFullYear() ? "" : ` ${y}`}`;
+}
+
+/** A thin labelled line between one day's songs and the next day's. Put it inside a <ul className="divide-y ...">. */
+export function DayDivider({ day }: { day: string }) {
+  return (
+    <li role="presentation" className="flex items-center gap-3 pb-1 pt-5 text-[10px] font-bold uppercase tracking-widest text-white/40 !border-t-0 [&+li]:!border-t-0">
+      <span>{dayLabel(day)}</span>
+      <span className="h-px flex-1 bg-white/15" />
+    </li>
+  );
+}
+
 /** Opens SoundCloud's own search page. No API key needed. */
 export const scSearchUrl = (q: string) => `https://soundcloud.com/search/sounds?q=${encodeURIComponent(q)}`;
 
@@ -85,10 +105,16 @@ export function TrackList({ tracks, title, showGenre, tintHouse }: { tracks: Tra
         <DownloadPdfButton title={title} tracks={tracks.map((t) => ({ artist: t.artist_name, title: t.title }))} />
       </div>
       <ul className="divide-y divide-white/10">
-        {tracks.map((t) => (
-          <TrackRow key={t.id} t={t} queue={tracks} showGenre={showGenre} tintHouse={tintHouse}
-            action={<LikeButton key={t.id + liked.has(t.id)} trackId={t.id} initiallyLiked={liked.has(t.id)} />} />
-        ))}
+        {tracks.flatMap((t, i) => {
+          const day = dayKey(t.released_on);
+          const rows: React.ReactNode[] = [];
+          if (day && day !== (i ? dayKey(tracks[i - 1].released_on) : null)) rows.push(<DayDivider key={`day-${day}-${i}`} day={day} />);
+          rows.push(
+            <TrackRow key={t.id} t={t} queue={tracks} showGenre={showGenre} tintHouse={tintHouse}
+              action={<LikeButton key={t.id + liked.has(t.id)} trackId={t.id} initiallyLiked={liked.has(t.id)} />} />
+          );
+          return rows;
+        })}
       </ul>
     </div>
   );

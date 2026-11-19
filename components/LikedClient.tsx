@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { Track, TrackRow } from "@/components/TrackList";
+import { DayDivider, Track, TrackRow, dayKey } from "@/components/TrackList";
 import { DownloadPdfButton } from "@/components/DownloadPdfButton";
 import { Genre, GenreToggle } from "@/components/GenreToggle";
 
@@ -142,9 +142,13 @@ export default function LikedClient() {
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {rows && !shown.length && <p className="text-white/50">{rows.length ? "No likes match." : "Nothing here yet."}</p>}
       <ul className="divide-y divide-white/10">
-        {shown.map((r) => {
+        {shown.flatMap((r, i) => {
           const on = sel.has(r.tracks.id);
-          return (
+          // Day dividers only make sense when the list is in date order: by date liked, or by date posted.
+          const dayOf = (x: Row) => (sortKey === "liked" ? dayKey(x.liked_at) : sortKey === "posted" ? dayKey(x.tracks.released_on) : null);
+          const day = dayOf(r);
+          const divider = day && day !== (i ? dayOf(shown[i - 1]) : null) ? [<DayDivider key={`day-${day}-${i}`} day={day} />] : [];
+          return [...divider,
             <TrackRow key={r.tracks.id} t={r.tracks} showGenre={!genre} queue={shown.map((x) => x.tracks)} extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
               leading={
                 <button onClick={() => toggle(r.tracks.id)} aria-pressed={on} aria-label={on ? "Deselect track" : "Select track"}
@@ -152,8 +156,7 @@ export default function LikedClient() {
                   {on ? "✓" : ""}
                 </button>
               }
-              action={<button onClick={() => unlike(r.tracks.id)} className="text-[#c6ff00]" aria-label="Unlike">♥</button>} />
-          );
+              action={<button onClick={() => unlike(r.tracks.id)} className="text-[#c6ff00]" aria-label="Unlike">♥</button>} />];
         })}
       </ul>
     </>
