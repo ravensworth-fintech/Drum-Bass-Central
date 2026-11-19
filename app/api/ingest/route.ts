@@ -66,7 +66,7 @@ async function tracklistJob(sb: SB) {
   const apiKey = process.env.YOUTUBE_API_KEY;
   const threeDaysAgo = new Date(Date.now() - 3 * 86400_000).toISOString();
   const { data, error } = await sb.from("mixes").select("id,title,dj_name,show_or_channel,platform_id")
-    .eq("tracklist_status", "none").or(`tracklist_checked_at.is.null,tracklist_checked_at.lt.${threeDaysAgo}`)
+    .eq("platform", "youtube").eq("tracklist_status", "none").or(`tracklist_checked_at.is.null,tracklist_checked_at.lt.${threeDaysAgo}`)
     .order("tracklist_checked_at", { ascending: true, nullsFirst: true }).order("uploaded_at", { ascending: false }).limit(6);
   if (error) throw new Error(error.message);
   const mixes = data ?? [];
@@ -91,7 +91,7 @@ async function tracklistJob(sb: SB) {
       }
     }));
   }
-  const { count } = await sb.from("mixes").select("id", { count: "exact", head: true }).eq("tracklist_status", "none").is("tracklist_checked_at", null);
+  const { count } = await sb.from("mixes").select("id", { count: "exact", head: true }).eq("platform", "youtube").eq("tracklist_status", "none").is("tracklist_checked_at", null);
   return { checked: mixes.length, found, still_unchecked: count ?? 0, comments_used: !!apiKey, notes };
 }
 
@@ -121,7 +121,7 @@ export async function GET(req: Request) {
     } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
   }
   if (params.get("sources")) { // health check: which channels work, and why the others don't
-    const { data, error } = await sb.from("sources").select("id,name,url,platform_id,last_success_at").eq("kind", "youtube").order("name");
+    const { data, error } = await sb.from("sources").select("id,name,url,kind,platform_id,last_success_at").in("kind", ["youtube", "soundcloud"]).order("name");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const { data: hist } = await sb.from("scan_history").select("source_id,ok,error,items_found,started_at").order("started_at", { ascending: false }).limit(2000);
     const latest = new Map<string, { ok: boolean; error: string | null; found: number }>();
@@ -132,7 +132,7 @@ export async function GET(req: Request) {
       total: all.length,
       working: all.length - all.filter((x) => latest.get(x.id as string)?.ok === false || !x.last_success_at).length,
       not_scanned_yet: broken.filter((x) => !latest.has(x.id as string)).map((x) => x.name),
-      empty_feed_check_these: all.filter((x) => x.last_success_at && latest.get(x.id as string)?.ok && latest.get(x.id as string)?.found === 0).map((x) => `${x.name}: https://www.youtube.com/channel/${x.platform_id}`),
+      empty_feed_check_these: all.filter((x) => x.last_success_at && latest.get(x.id as string)?.ok && latest.get(x.id as string)?.found === 0).map((x) => `${x.name}: ${x.kind === "soundcloud" ? x.url : `https://www.youtube.com/channel/${x.platform_id}`}`),
       failed: all.filter((x) => latest.get(x.id as string)?.ok === false).map((x) => ({ name: x.name, url: x.url, error: latest.get(x.id as string)?.error ?? "unknown" })),
     });
   }

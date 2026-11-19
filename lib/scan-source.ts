@@ -5,7 +5,7 @@ import { fetchChannelFeed, fetchDurations, looksLikeShort, namesMatch, normKey, 
 import { cleanMixTitle, guessDj, isMixTitle, SKIP_WORDS } from "@/lib/mixes";
 import { parseTracklist, TLEntry } from "@/lib/tracklist";
 
-export type Source = { id: string; name: string; url: string; platform_id: string | null; is_artist?: boolean; genre?: "dnb" | "house" | "bands" };
+export type Source = { id: string; name: string; url: string; kind?: string; platform_id: string | null; is_artist?: boolean; genre?: "dnb" | "house" | "bands" };
 export type SB = ReturnType<typeof admin>;
 export const ytUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`;
 

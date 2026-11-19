@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { admin } from "@/lib/supabase-admin";
 import { fetchChannelFeed, resolveChannelId } from "@/lib/youtube-feed";
-import { scanSource, Source } from "@/lib/scan-source";
+import { Source } from "@/lib/scan-source";
+import { scanAny } from "@/lib/run-ingest";
+import { fetchScFeed, resolveScUser } from "@/lib/soundcloud-feed";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -27,8 +29,9 @@ export async function POST(req: Request) {
   let url = String(body.url ?? "").trim();
   if (!url) return fail("Paste a YouTube channel link.");
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
-  if (!/^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(url)) return fail("That isn't a youtube.com channel link. Example: https://www.youtube.com/@ChannelName");
   const genre = body.genre === "house" ? "house" : body.genre === "bands" ? "bands" : "dnb";
+  if (/^https?:\/\/((www|m|on|feeds)\.)?soundcloud\.com\//i.test(url)) return addSoundcloud(sb, url, genre, body.isArtist !== false);
+  if (!/^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(url)) return fail("That isn't a YouTube or SoundCloud link. Examples: https://www.youtube.com/@ChannelName or https://soundcloud.com/artistname");
 
   try {
     const channelId = await resolveChannelId(url);
@@ -52,7 +55,36 @@ export async function POST(req: Request) {
       src = data as Source;
     }
 
-    const result = await scanSource(sb, src);
+    const result = await scanAny(sb, src);
+    return NextResponse.json({ ok: true, already, name: src.name, genre: src.genre ?? genre, scan: result });
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : String(e), 500);
+  }
+}
+
+/** SoundCloud account (profile link or feeds.soundcloud.com RSS link): add it as a `soundcloud` source and scan its RSS feed now. */
+async function addSoundcloud(sb: ReturnType<typeof admin>, url: string, genre: "dnb" | "house" | "bands", isArtist: boolean) {
+  try {
+    const userId = await resolveScUser(url);
+    const feed = await fetchScFeed(userId);
+    if (!feed.items.length) return fail("That SoundCloud account has no public tracks in its RSS feed, or SoundCloud doesn't publish a feed for it.");
+    const profile = url.match(/^https?:\/\/(?:www\.|m\.)?soundcloud\.com\/([^/?#]+)/i)?.[1];
+    const canonical = profile && profile !== "you" ? `https://soundcloud.com/${profile}` : `https://feeds.soundcloud.com/users/soundcloud:users:${userId}/sounds.rss`;
+    const name = feed.title || profile || `SoundCloud ${userId}`;
+
+    const { data: existing } = await sb.from("sources").select("id,name,url,kind,platform_id,is_artist,genre").eq("kind", "soundcloud").eq("platform_id", userId).limit(1);
+    let src: Source, already = false;
+    if (existing?.length) {
+      already = true;
+      src = existing[0] as Source;
+      await sb.from("sources").update({ enabled: true }).eq("id", src.id);
+    } else {
+      const { data, error } = await sb.from("sources").insert({ name, kind: "soundcloud", url: canonical, platform_id: userId, monitorable: "auto", enabled: true, genre, is_artist: isArtist })
+        .select("id,name,url,kind,platform_id,is_artist,genre").single();
+      if (error) return fail(error.message, 500);
+      src = data as Source;
+    }
+    const result = await scanAny(sb, src);
     return NextResponse.json({ ok: true, already, name: src.name, genre: src.genre ?? genre, scan: result });
   } catch (e) {
     return fail(e instanceof Error ? e.message : String(e), 500);

@@ -65,3 +65,8 @@ and appears in the Likes toggle. Tick "artist's own channel" for a band's own ch
 ## INGEST button (admins only)
 Next to ADD +. Scans every enabled channel, works through the whole list in rounds (each round is one ~40 second server run), then reloads the page.
 It uses your sign-in (`/api/run-ingest`), so no secret goes in the address bar. The scheduled run in `vercel.json` is separate and still calls `/api/ingest` with `CRON_SECRET`.
+
+## SoundCloud (RSS)
+ADD + accepts a `soundcloud.com/artist` link (or a `feeds.soundcloud.com/users/soundcloud:users:ID/sounds.rss` link). The account becomes a `soundcloud` source and is scanned
+through its public RSS feed (newest uploads only), with the same track/mix sorting and de-duplication as YouTube. SoundCloud tracks play in the site's player through SoundCloud's
+official Widget API. SoundCloud mixes get no automatic tracklist lookup (that job reads YouTube comments).

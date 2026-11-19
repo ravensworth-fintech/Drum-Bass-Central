@@ -13,6 +13,9 @@ export const usePlayer = () => useContext(PlayerCtx);
 
 export const isYT = (t: Track) => !!t.embed_url?.includes("youtube.com/embed/");
 const vidOf = (t: Track) => t.embed_url!.split("/embed/")[1].split(/[?&#]/)[0];
+// SoundCloud tracks play through SoundCloud's official Widget API (a second, hidden player). YouTube keeps its own player.
+export const isSC = (t: Track) => !!t.embed_url?.includes("w.soundcloud.com/player");
+export const isPlayable = (t: Track) => isYT(t) || isSC(t);
 
 let ytReady: Promise<any> | null = null;
 function loadYT(): Promise<any> {
@@ -28,6 +31,21 @@ function loadYT(): Promise<any> {
   });
   return ytReady;
 }
+
+let scReadyP: Promise<any> | null = null;
+function loadSC(): Promise<any> {
+  if (scReadyP) return scReadyP;
+  scReadyP = new Promise((resolve) => {
+    const w = window as any;
+    if (w.SC?.Widget) return resolve(w.SC);
+    const s = document.createElement("script");
+    s.src = "https://w.soundcloud.com/player/api.js";
+    s.onload = () => resolve(w.SC);
+    document.head.appendChild(s);
+  });
+  return scReadyP;
+}
+const SC_OPTS = { auto_play: true, hide_related: true, show_comments: false, show_user: false, show_reposts: false, visual: false };
 
 const fmt = (n: number) => {
   const s = Math.max(0, Math.floor(n || 0)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
@@ -91,12 +109,56 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const queue = useRef<Track[]>([]);
   const cur = useRef<Track | null>(null);
   const stepRef = useRef<(d: 1 | -1) => void>(() => {});
+  const engine = useRef<"yt" | "sc">("yt");
+  const scHost = useRef<HTMLDivElement>(null);
+  const scw = useRef<any>(null);
+  const scReady = useRef(false);
+  const scTime = useRef({ pos: 0, dur: 0 });
+  const scAdapter = useMemo(() => ({
+    getCurrentTime: () => scTime.current.pos,
+    getDuration: () => scTime.current.dur,
+    seekTo: (s: number) => { scw.current?.seekTo(s * 1000); scTime.current.pos = s; },
+  }), []);
+
+  const loadSCTrack = useCallback((t: Track) => {
+    scTime.current = { pos: 0, dur: t.duration_seconds ?? 0 };
+    if (scw.current && scReady.current) { scw.current.load(t.source_url, { ...SC_OPTS, callback: () => scw.current.play() }); return; }
+    if (scw.current) return; // still starting up: READY loads whatever is current
+    loadSC().then((SC) => {
+      if (scw.current || !scHost.current) return;
+      const iframe = document.createElement("iframe");
+      iframe.allow = "autoplay"; iframe.width = "300"; iframe.height = "100"; iframe.title = "SoundCloud player";
+      iframe.src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(t.source_url)}&auto_play=true&hide_related=true&show_comments=false&visual=false`;
+      scHost.current.appendChild(iframe);
+      const w = SC.Widget(iframe);
+      scw.current = w;
+      const sync = () => w.getDuration((ms: number) => { if (ms) scTime.current.dur = ms / 1000; });
+      w.bind(SC.Widget.Events.READY, () => {
+        scReady.current = true; sync();
+        const c = cur.current;
+        if (c && isSC(c) && c.source_url !== t.source_url) w.load(c.source_url, { ...SC_OPTS, callback: () => w.play() }); else w.play();
+      });
+      w.bind(SC.Widget.Events.PLAY, () => { if (engine.current === "sc") { setPlaying(true); sync(); } });
+      w.bind(SC.Widget.Events.PAUSE, () => { if (engine.current === "sc") setPlaying(false); });
+      w.bind(SC.Widget.Events.FINISH, () => { if (engine.current === "sc") stepRef.current(1); });
+      w.bind(SC.Widget.Events.PLAY_PROGRESS, (e: any) => { scTime.current.pos = (e?.currentPosition ?? 0) / 1000; });
+      w.bind(SC.Widget.Events.ERROR, () => { if (engine.current === "sc") stepRef.current(1); });
+    });
+  }, []);
   const [current, setCurrent] = useState<Track | null>(null);
   const [playing, setPlaying] = useState(false);
 
   const load = useCallback((t: Track) => {
     cur.current = t;
     setCurrent(t);
+    if (isSC(t)) {
+      engine.current = "sc";
+      try { if (ready.current) player.current.pauseVideo(); } catch { /* ignore */ }
+      loadSCTrack(t);
+      return;
+    }
+    engine.current = "yt";
+    try { scw.current?.pause(); } catch { /* ignore */ }
     if (ready.current) { player.current.loadVideoById(vidOf(t)); return; }
     if (player.current) return; // still starting up: onReady loads cur.current
     loadYT().then((YT) => {
@@ -109,46 +171,50 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         events: {
           onReady: () => { ready.current = true; if (cur.current) player.current.loadVideoById(vidOf(cur.current)); },
           onStateChange: (e: any) => {
+            if (engine.current !== "yt") return;
             if (e.data === 0) stepRef.current(1); // ended -> next track
             else if (e.data === 1) setPlaying(true);
             else if (e.data === 2) setPlaying(false);
           },
-          onError: () => stepRef.current(1), // embedding blocked -> skip
+          onError: () => { if (engine.current === "yt") stepRef.current(1); }, // embedding blocked -> skip
         },
       });
     });
-  }, []);
+  }, [loadSCTrack]);
 
   stepRef.current = (d) => {
     const q = queue.current;
     const i = q.findIndex((x) => x.id === cur.current?.id);
-    const next = d === 1 ? q.slice(i + 1).find(isYT) : q.slice(0, Math.max(i, 0)).reverse().find(isYT);
+    const next = d === 1 ? q.slice(i + 1).find(isPlayable) : q.slice(0, Math.max(i, 0)).reverse().find(isPlayable);
     if (next) load(next); else if (d === 1) setPlaying(false);
   };
 
   const play = useCallback((t: Track, list: Track[]) => { queue.current = list; load(t); }, [load]);
   const toggle = useCallback(() => {
+    if (engine.current === "sc") { scw.current?.toggle(); return; }
     const p = player.current;
     if (!ready.current) return;
     if (p.getPlayerState() === 1) p.pauseVideo(); else p.playVideo();
   }, []);
   const close = () => {
     if (ready.current) player.current.stopVideo();
+    try { scw.current?.pause(); } catch { /* ignore */ }
     cur.current = null; setCurrent(null); setPlaying(false);
   };
 
   const ctx = useMemo(() => ({ current, playing, play, toggle }), [current, playing, play, toggle]);
-  const getPlayer = useCallback(() => (ready.current ? player.current : null), []);
+  const getPlayer = useCallback(() => (engine.current === "sc" ? (scReady.current ? scAdapter : null) : ready.current ? player.current : null), [scAdapter]);
   const skip = "flex h-12 w-12 items-center justify-center text-2xl text-white/80 hover:text-[#c6ff00]";
   return (
     <PlayerCtx.Provider value={ctx}>
       {children}
+      <div ref={scHost} aria-hidden className="pointer-events-none fixed bottom-0 left-0 h-px w-px overflow-hidden opacity-0" /> {/* hidden SoundCloud player */}
       {current && <div className="h-36" />} {/* keeps the last rows clear of the bar */}
       <div className={`fixed inset-x-0 bottom-0 z-50 border-t border-white/15 bg-black/95 backdrop-blur ${current ? "" : "hidden"}`}>
         <div className="mx-auto max-w-5xl px-4">
         <Progress key={current?.id} getPlayer={getPlayer} />
         <div className="flex items-center gap-3 py-2 sm:gap-5">
-          <div className="relative aspect-video w-28 shrink-0 bg-black sm:w-44"><div ref={host} className="absolute inset-0" /></div>
+          <div className="relative aspect-video w-28 shrink-0 bg-black sm:w-44"><div ref={host} className="absolute inset-0" />{current && isSC(current) && <div className="absolute inset-0 bg-black">{current.artwork_url && <img src={current.artwork_url} alt="" className="h-full w-full object-cover" />}</div>}</div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold sm:text-base">{current?.title}</div>
             <div className="truncate text-xs text-white/60 sm:text-sm">{current?.artist_name}</div>

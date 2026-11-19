@@ -13,7 +13,7 @@ export function decode(s: string) {
     .replace(/&amp;/g, "&");
 }
 
-async function fetchText(url: string): Promise<string> {
+export async function fetchText(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { "User-Agent": UA, "Accept-Language": "en", Cookie: "CONSENT=YES+1" },
     signal: AbortSignal.timeout(12000),

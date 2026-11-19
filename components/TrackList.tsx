@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { LikeButton } from "./LikeButton";
 import { DownloadPdfButton } from "./DownloadPdfButton";
-import { isYT, usePlayer } from "./PlayerProvider";
+import { isPlayable, usePlayer } from "./PlayerProvider";
 
 export type Track = {
   id: string; title: string; artist_name: string; subgenre: string;
@@ -44,10 +44,10 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
     <li ref={li} className={`py-2 ${isCur ? "bg-white/5" : tintHouse && t.genre === "house" ? "bg-indigo-300/[0.07]" : ""}`}>
       <div className="flex items-center gap-3">
         {leading}
-        <button onClick={() => (isCur ? toggle() : play(t, queue))} disabled={!isYT(t)} aria-label={isCur && playing ? "Pause" : "Play"}
+        <button onClick={() => (isCur ? toggle() : play(t, queue))} disabled={!isPlayable(t)} aria-label={isCur && playing ? "Pause" : "Play"}
           className="group relative h-11 w-11 shrink-0 overflow-hidden bg-white/10">
           {t.artwork_url && <img src={t.artwork_url} alt="" loading="lazy" className="h-full w-full object-cover" />}
-          {isYT(t) && (
+          {isPlayable(t) && (
             <span className={`absolute inset-0 flex items-center justify-center text-sm group-hover:bg-black/60 group-hover:text-[#c6ff00] ${isCur ? "bg-black/60 text-[#c6ff00]" : "bg-black/40"}`}>{isCur && playing ? "❚❚" : "▶"}</span>
           )}
         </button>

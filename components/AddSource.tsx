@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase-browser";
 
 type ScanResult = { ok?: boolean; error?: string; found?: number; added?: number; mixes_added?: number; skipped?: number };
 
-/** "ADD +" (admins only): paste a YouTube channel link, pick a genre, and the site adds it as a source, scans it and reloads. */
+/** "ADD +" (admins only): paste a YouTube or SoundCloud link, pick a genre, and the site adds it as a source, scans it and reloads. */
 export function AddSource() {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
@@ -23,7 +23,7 @@ export function AddSource() {
       const res = await fetch("/api/add-source", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ url: url.trim(), genre, isArtist: artist }),
+        body: JSON.stringify({ url: url.trim(), genre, isArtist: artist || /soundcloud\.com/i.test(url) }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.ok) throw new Error(json.error ?? `Something went wrong (HTTP ${res.status}).`);
@@ -44,7 +44,7 @@ export function AddSource() {
         <div className="absolute right-0 z-20 mt-2 w-80 border border-white/20 bg-black p-4 text-white shadow-xl">
           <label className="mb-1 block text-xs uppercase tracking-widest text-white/60">YouTube channel link</label>
           <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} autoFocus
-            placeholder="https://www.youtube.com/@ChannelName" className="mb-3 w-full border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
+            placeholder="youtube.com/@Channel or soundcloud.com/artist" className="mb-3 w-full border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
           <div className="mb-3 flex items-center gap-2">
             {(["dnb", "house", "bands"] as const).map((g) => (
               <button key={g} onClick={() => { setGenre(g); if (g === "bands") setArtist(true); }} aria-pressed={genre === g}
