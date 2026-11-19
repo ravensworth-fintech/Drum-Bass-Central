@@ -3,7 +3,7 @@ import Link from "next/link";
 import { AuthNav } from "@/components/AuthNav";
 import { PlayerProvider } from "@/components/PlayerProvider";
 export const metadata = { title: "DropTheFire" };
-const nav = [["/", "Discover"], ["/dnb", "D&B"], ["/house", "House"], ["/mixes", "Mixes"], ["/liked", "Likes"]];
+const nav = [["/", "Discover"], ["/dnb", "D&B"], ["/house", "House"], ["/bands", "Bands"], ["/mixes", "Mixes"], ["/liked", "Likes"]];
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en"><body><PlayerProvider>

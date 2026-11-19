@@ -5,8 +5,8 @@ import { TrackList, Track, scSearchUrl } from "@/components/TrackList";
 
 const PAGE = 30;
 
-/** genre = "dnb" or "house" shows one genre; leave it out to show both (Discover). */
-export function TracksBrowser({ initial, channels, genre, label }: { initial: Track[]; channels: string[]; genre?: "dnb" | "house"; label: string }) {
+/** genre shows one genre; leave it out for Discover, which shows D&B and House together (Bands stays on its own tab). */
+export function TracksBrowser({ initial, channels, genre, label }: { initial: Track[]; channels: string[]; genre?: "dnb" | "house" | "bands"; label: string }) {
   const [tracks, setTracks] = useState<Track[]>(initial.slice(0, PAGE));
   const [hasMore, setHasMore] = useState(initial.length > PAGE);
   const [q, setQ] = useState("");
@@ -26,7 +26,7 @@ export function TracksBrowser({ initial, channels, genre, label }: { initial: Tr
       .range(offset, offset + PAGE); // PAGE + 1 rows: the extra one tells us there is more
     const term = q.trim().replace(/[,()%*\\]/g, " ").trim();
     if (term) query = query.or(`title.ilike.%${term}%,artist_name.ilike.%${term}%`);
-    if (genre) query = query.eq("genre", genre);
+    query = genre ? query.eq("genre", genre) : query.in("genre", ["dnb", "house"]);
     if (channel) query = query.eq("source_name", channel);
     const { data, error } = await query;
     const all = (data ?? []) as Track[];

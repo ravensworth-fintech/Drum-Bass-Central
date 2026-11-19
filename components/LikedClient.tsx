@@ -112,7 +112,7 @@ export default function LikedClient() {
       <h1 className="mb-6 text-3xl font-black uppercase">Likes</h1>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <GenreToggle value={genre} onChange={pickGenre} />
+        <GenreToggle value={genre} onChange={pickGenre} withBands />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search likes" className="border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
         <select value={channel} onChange={(e) => setChannel(e.target.value)} className="border border-white/20 bg-black px-3 py-1.5 text-sm">
           <option value="">All channels</option>

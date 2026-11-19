@@ -50,8 +50,8 @@ export function namesMatch(sourceName: string, channelTitle: string): boolean {
 }
 
 /** Looks a channel up by name via YouTube's own search page. Only accepts a result whose name matches. */
-export async function resolveByName(name: string, genre: "dnb" | "house" = "dnb"): Promise<string> {
-  const html = await fetchText(`https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} ${genre === "house" ? "house music" : "drum and bass"}`)}&sp=EgIQAg%253D%253D`);
+export async function resolveByName(name: string, genre: "dnb" | "house" | "bands" = "dnb"): Promise<string> {
+  const html = await fetchText(`https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} ${genre === "house" ? "house music" : genre === "bands" ? "band music" : "drum and bass"}`)}&sp=EgIQAg%253D%253D`);
   const re = /"channelRenderer":\{"channelId":"(UC[\w-]{22})"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {

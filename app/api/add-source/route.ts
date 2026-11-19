@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   if (!url) return fail("Paste a YouTube channel link.");
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
   if (!/^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(url)) return fail("That isn't a youtube.com channel link. Example: https://www.youtube.com/@ChannelName");
-  const genre = body.genre === "house" ? "house" : "dnb";
+  const genre = body.genre === "house" ? "house" : body.genre === "bands" ? "bands" : "dnb";
 
   try {
     const channelId = await resolveChannelId(url);

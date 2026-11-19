@@ -30,7 +30,7 @@ export const scSearchUrl = (q: string) => `https://soundcloud.com/search/sounds?
 
 const chip = "shrink-0 border border-white/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50 hover:border-[#c6ff00] hover:text-[#c6ff00]";
 
-export const genreLabel = (g?: string) => (g === "house" ? "House" : "D&B");
+export const genreLabel = (g?: string) => (g === "house" ? "House" : g === "bands" ? "Bands" : "D&B");
 
 export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGenre }: {
   t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode; queue: Track[]; below?: React.ReactNode; noSC?: boolean; showGenre?: boolean;

@@ -5,7 +5,7 @@ import { fetchChannelFeed, fetchDurations, looksLikeShort, namesMatch, normKey, 
 import { cleanMixTitle, guessDj, isMixTitle, SKIP_WORDS } from "@/lib/mixes";
 import { parseTracklist, TLEntry } from "@/lib/tracklist";
 
-export type Source = { id: string; name: string; url: string; platform_id: string | null; is_artist?: boolean; genre?: "dnb" | "house" };
+export type Source = { id: string; name: string; url: string; platform_id: string | null; is_artist?: boolean; genre?: "dnb" | "house" | "bands" };
 export type SB = ReturnType<typeof admin>;
 export const ytUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`;
 
@@ -71,6 +71,7 @@ export async function scanSource(sb: ReturnType<typeof admin>, src: Source) {
       const dur = durations.get(e.videoId) ?? null;
       if (e.isShort || looksLikeShort(e.title) || (dur != null && dur <= 60) || SKIP_WORDS.test(e.title)) { skipped++; continue; } // Shorts and non-music uploads
       if (isMixTitle(e.title) || (dur != null && dur >= 1500)) {
+        if (src.genre === "bands") { skipped++; continue; } // Bands is tracks-only: full concerts and long videos are not mixes
         const title = cleanMixTitle(e.title);
         mixRows.push({
           title, dj_name: guessDj(title), show_or_channel: src.name, uploaded_at: e.publishedAt, duration_seconds: dur,

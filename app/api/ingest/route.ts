@@ -103,7 +103,7 @@ export async function GET(req: Request) {
   const sb = admin();
   const params = new URL(req.url).searchParams;
   const add = params.get("add");
-  if (add) { // /api/ingest?secret=...&name=Label Name&add=https://www.youtube.com/@Handle&genre=house  (adds a source, or repoints an existing one with that name; genre is dnb or house)
+  if (add) { // /api/ingest?secret=...&name=Label Name&add=https://www.youtube.com/@Handle&genre=house  (adds a source, or repoints an existing one with that name; genre is dnb, house or bands)
     if (!/^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(add)) return NextResponse.json({ error: "add must be a youtube.com channel URL" }, { status: 400 });
     const name = params.get("name") || decodeURIComponent(add.split("/").filter(Boolean).pop() ?? "YouTube channel");
     try {
@@ -111,7 +111,7 @@ export async function GET(req: Request) {
       const feed = await fetchChannelFeed(channelId); // shows you which channel you just connected
       const { data: existing } = await sb.from("sources").select("id").eq("name", name).limit(1);
       const genreParam = params.get("genre");
-      const row = { url: add, platform_id: channelId, enabled: true, ...(genreParam === "house" || genreParam === "dnb" ? { genre: genreParam } : {}) };
+      const row = { url: add, platform_id: channelId, enabled: true, ...(genreParam === "house" || genreParam === "dnb" || genreParam === "bands" ? { genre: genreParam } : {}) };
       const { error } = existing?.length
         ? await sb.from("sources").update(row).eq("id", existing[0].id)
         : await sb.from("sources").insert({ name, kind: "youtube", monitorable: "auto", ...row });

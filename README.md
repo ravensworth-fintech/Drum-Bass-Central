@@ -57,3 +57,7 @@ Add a single House channel later: `/api/ingest?secret=...&name=Name&add=https://
 Run `supabase/make_me_admin.sql` once (with your login email) so your account has `profiles.is_admin = true`. The ADD + button then appears next to Sign out.
 Paste a YouTube channel link, pick D&B or House, and the site adds it to `sources`, scans it immediately (its newest ~15 uploads) and reloads.
 The route `/api/add-source` checks your login and `is_admin` on the server, so nobody else can add sources. Needs `SUPABASE_SERVICE_ROLE_KEY`.
+
+## Bands (third genre)
+Run `supabase/add_bands.sql` once. The Bands tab shows only channels added with the Bands option in ADD +. It is tracks-only (no mixes), is left out of Discover,
+and appears in the Likes toggle. Tick "artist's own channel" for a band's own channel so uploads titled just with the song name get the band as artist.

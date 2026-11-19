@@ -8,7 +8,7 @@ type ScanResult = { ok?: boolean; error?: string; found?: number; added?: number
 export function AddSource() {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
-  const [genre, setGenre] = useState<"dnb" | "house">("dnb");
+  const [genre, setGenre] = useState<"dnb" | "house" | "bands">("dnb");
   const [artist, setArtist] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
@@ -46,9 +46,9 @@ export function AddSource() {
           <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} autoFocus
             placeholder="https://www.youtube.com/@ChannelName" className="mb-3 w-full border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
           <div className="mb-3 flex items-center gap-2">
-            {(["dnb", "house"] as const).map((g) => (
-              <button key={g} onClick={() => setGenre(g)} aria-pressed={genre === g}
-                className={`border px-3 py-1 text-xs font-bold uppercase tracking-widest ${genre === g ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/20 text-white/70"}`}>{g === "dnb" ? "D&B" : "House"}</button>
+            {(["dnb", "house", "bands"] as const).map((g) => (
+              <button key={g} onClick={() => { setGenre(g); if (g === "bands") setArtist(true); }} aria-pressed={genre === g}
+                className={`border px-3 py-1 text-xs font-bold uppercase tracking-widest ${genre === g ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/20 text-white/70"}`}>{g === "dnb" ? "D&B" : g === "house" ? "House" : "Bands"}</button>
             ))}
           </div>
           <label className="mb-3 flex items-start gap-2 text-xs text-white/60">
