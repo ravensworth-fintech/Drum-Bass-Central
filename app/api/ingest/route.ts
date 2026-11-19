@@ -235,14 +235,19 @@ export async function GET(req: Request) {
     const { error } = await sb.from("sources").upsert({ name, kind: "youtube", url: add, monitorable: "auto" }, { onConflict: "url", ignoreDuplicates: true });
     return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ added: { name, url: add }, next: "open /api/ingest to scan it" });
   }
-  if (params.get("sources")) { // quick health check: which channels are connected and which still need attention
-    const { data, error } = await sb.from("sources").select("name,url,platform_id,last_success_at,enabled").eq("kind", "youtube").order("name");
+  if (params.get("sources")) { // health check: which channels work, and why the others don't
+    const { data, error } = await sb.from("sources").select("id,name,url,platform_id,last_success_at").eq("kind", "youtube").order("name");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const { data: hist } = await sb.from("scan_history").select("source_id,ok,error,started_at").order("started_at", { ascending: false }).limit(2000);
+    const latest = new Map<string, { ok: boolean; error: string | null }>();
+    for (const h of hist ?? []) if (!latest.has(h.source_id as string)) latest.set(h.source_id as string, { ok: !!h.ok, error: (h.error as string | null) ?? null });
     const all = data ?? [];
+    const broken = all.filter((x) => !x.last_success_at);
     return NextResponse.json({
       total: all.length,
-      working: all.filter((x) => x.last_success_at).length,
-      never_worked: all.filter((x) => !x.last_success_at).map((x) => `${x.name} (${x.url})`),
+      working: all.length - broken.length,
+      not_scanned_yet: broken.filter((x) => !latest.has(x.id as string)).map((x) => x.name),
+      failed: broken.filter((x) => latest.has(x.id as string)).map((x) => ({ name: x.name, url: x.url, error: latest.get(x.id as string)?.error ?? "unknown" })),
     });
   }
   if (params.get("tracklists")) {
