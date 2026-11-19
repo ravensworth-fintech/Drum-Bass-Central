@@ -1,6 +1,8 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Track } from "./TrackList";
+import { LikeButton } from "./LikeButton";
+import { createClient } from "@/lib/supabase-browser";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // ONE persistent YouTube player (official IFrame API) that lives in the layout. Because the same player keeps
@@ -62,6 +64,24 @@ function Progress({ getPlayer }: { getPlayer: () => any }) {
       <span className="w-10">{fmt(dur)}</span>
     </div>
   );
+}
+
+/** Heart for the track in the player. Looks up whether the signed-in user already liked it. Mixes can't be liked. */
+function PlayerLike({ trackId }: { trackId: string }) {
+  const [liked, setLiked] = useState<boolean | null>(null);
+  useEffect(() => {
+    let dead = false;
+    (async () => {
+      const sb = createClient();
+      const { data: u } = await sb.auth.getUser();
+      if (!u.user) return !dead && setLiked(false);
+      const { data } = await sb.from("liked_tracks").select("track_id").eq("track_id", trackId).maybeSingle();
+      if (!dead) setLiked(!!data);
+    })();
+    return () => { dead = true; };
+  }, [trackId]);
+  if (liked === null) return <span className="w-10" />;
+  return <LikeButton key={trackId + liked} trackId={trackId} initiallyLiked={liked} className="flex h-12 w-10 items-center justify-center text-3xl" />;
 }
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
@@ -137,6 +157,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           <button onClick={toggle} aria-label={playing ? "Pause" : "Play"}
             className="flex h-14 w-14 shrink-0 items-center justify-center bg-[#c6ff00] text-2xl text-black hover:bg-white">{playing ? "⏸" : "▶"}</button>
           <button onClick={() => stepRef.current(1)} aria-label="Next track" className={skip}>⏭</button>
+          {current && current.kind !== "mix" && <PlayerLike key={current.id} trackId={current.id} />}
           <button onClick={close} aria-label="Close player" className="ml-1 px-2 text-lg text-white/40 hover:text-white">✕</button>
         </div>
         </div>

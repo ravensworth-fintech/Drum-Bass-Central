@@ -79,7 +79,7 @@ export function TracksBrowser({ initial, channels, genre, label }: { initial: Tr
       </div>
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {tracks.length ? (
-        <TrackList tracks={tracks} title={label} showGenre={!genre} />
+        <TrackList tracks={tracks} title={label} showGenre={!genre} tintHouse={!genre} />
       ) : (
         !loading && <p className="text-white/50">{q || channel ? "No tracks match that search." : "No tracks yet."}</p>
       )}

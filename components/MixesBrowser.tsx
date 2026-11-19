@@ -10,7 +10,7 @@ const PAGE = 30;
 const toTrack = (m: Mix): Track => ({
   id: m.id, title: m.title, artist_name: m.dj_name ?? m.show_or_channel ?? "", subgenre: "Unknown", artwork_url: m.artwork_url,
   source_url: m.source_url, embed_url: m.embed_url, released_on: m.uploaded_at ? m.uploaded_at.slice(0, 10) : null,
-  source_name: m.show_or_channel, duration_seconds: m.duration_seconds, genre: m.genre,
+  source_name: m.show_or_channel, duration_seconds: m.duration_seconds, genre: m.genre, kind: "mix",
 });
 
 
