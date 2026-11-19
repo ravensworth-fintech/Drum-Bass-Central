@@ -7,7 +7,7 @@ import { bestFromComments, fetchCommentTexts, find1001, parseTracklist, TLEntry 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-type Source = { id: string; name: string; url: string; platform_id: string | null };
+type Source = { id: string; name: string; url: string; platform_id: string | null; is_artist?: boolean };
 type SB = ReturnType<typeof admin>;
 const ytUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`;
 
@@ -76,7 +76,7 @@ async function scanSource(sb: ReturnType<typeof admin>, src: Source) {
         });
         continue;
       }
-      const p = parseTrack(e.title);
+      const p = parseTrack(e.title, false, src.is_artist ? src.name : undefined);
       if (!p) { skipped++; continue; }
       rows.push({
         title: p.title,
@@ -125,7 +125,7 @@ async function scanSource(sb: ReturnType<typeof admin>, src: Source) {
 
     await sb.from("scan_history").insert({ source_id: src.id, started_at: startedAt, finished_at: new Date().toISOString(), ok: true, items_found: found, items_new: added });
     await sb.from("sources").update({ last_success_at: new Date().toISOString() }).eq("id", src.id);
-    return { source: src.name, ok: true, found, added, mixes_added: mixesAdded, tracklists_from_description: tracklistsFound, skipped };
+    return { source: src.name, ok: true, channel: feed.title, channel_id: channelId, found, added, mixes_added: mixesAdded, tracklists_from_description: tracklistsFound, skipped, ...(found === 0 ? { note: "feed has no uploads: open youtube.com/channel/" + channelId + " to check this is the right channel" } : {}) };
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     await sb.from("scan_history").insert({ source_id: src.id, started_at: startedAt, finished_at: new Date().toISOString(), ok: false, items_found: found, items_new: added, error });
@@ -229,24 +229,34 @@ export async function GET(req: Request) {
   const sb = admin();
   const params = new URL(req.url).searchParams;
   const add = params.get("add");
-  if (add) { // /api/ingest?secret=...&add=https://www.youtube.com/@Handle&name=Label Name
+  if (add) { // /api/ingest?secret=...&name=Label Name&add=https://www.youtube.com/@Handle  (adds a source, or repoints an existing one with that name)
     if (!/^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(add)) return NextResponse.json({ error: "add must be a youtube.com channel URL" }, { status: 400 });
     const name = params.get("name") || decodeURIComponent(add.split("/").filter(Boolean).pop() ?? "YouTube channel");
-    const { error } = await sb.from("sources").upsert({ name, kind: "youtube", url: add, monitorable: "auto" }, { onConflict: "url", ignoreDuplicates: true });
-    return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ added: { name, url: add }, next: "open /api/ingest to scan it" });
+    try {
+      const channelId = await resolveChannelId(add);
+      const feed = await fetchChannelFeed(channelId); // shows you which channel you just connected
+      const { data: existing } = await sb.from("sources").select("id").eq("name", name).limit(1);
+      const row = { url: add, platform_id: channelId, enabled: true };
+      const { error } = existing?.length
+        ? await sb.from("sources").update(row).eq("id", existing[0].id)
+        : await sb.from("sources").insert({ name, kind: "youtube", monitorable: "auto", ...row });
+      if (error) throw new Error(error.message);
+      return NextResponse.json({ saved: name, connected_to_channel: feed.title, recent_uploads: feed.entries.length, next: "open /api/ingest to scan it" });
+    } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
   }
   if (params.get("sources")) { // health check: which channels work, and why the others don't
     const { data, error } = await sb.from("sources").select("id,name,url,platform_id,last_success_at").eq("kind", "youtube").order("name");
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    const { data: hist } = await sb.from("scan_history").select("source_id,ok,error,started_at").order("started_at", { ascending: false }).limit(2000);
-    const latest = new Map<string, { ok: boolean; error: string | null }>();
-    for (const h of hist ?? []) if (!latest.has(h.source_id as string)) latest.set(h.source_id as string, { ok: !!h.ok, error: (h.error as string | null) ?? null });
+    const { data: hist } = await sb.from("scan_history").select("source_id,ok,error,items_found,started_at").order("started_at", { ascending: false }).limit(2000);
+    const latest = new Map<string, { ok: boolean; error: string | null; found: number }>();
+    for (const h of hist ?? []) if (!latest.has(h.source_id as string)) latest.set(h.source_id as string, { ok: !!h.ok, error: (h.error as string | null) ?? null, found: Number(h.items_found ?? 0) });
     const all = data ?? [];
     const broken = all.filter((x) => !x.last_success_at);
     return NextResponse.json({
       total: all.length,
       working: all.length - broken.length,
       not_scanned_yet: broken.filter((x) => !latest.has(x.id as string)).map((x) => x.name),
+      empty_feed_check_these: all.filter((x) => x.last_success_at && latest.get(x.id as string)?.ok && latest.get(x.id as string)?.found === 0).map((x) => `${x.name}: https://www.youtube.com/channel/${x.platform_id}`),
       failed: broken.filter((x) => latest.has(x.id as string)).map((x) => ({ name: x.name, url: x.url, error: latest.get(x.id as string)?.error ?? "unknown" })),
     });
   }
@@ -263,7 +273,7 @@ export async function GET(req: Request) {
     catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
   }
   // Least-recently-scanned first, in small batches, within a time budget. If the list is long, a second run picks up the rest.
-  const { data: sources, error } = await sb.from("sources").select("id,name,url,platform_id").eq("kind", "youtube").eq("enabled", true)
+  const { data: sources, error } = await sb.from("sources").select("id,name,url,platform_id,is_artist").eq("kind", "youtube").eq("enabled", true)
     .order("last_success_at", { ascending: true, nullsFirst: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

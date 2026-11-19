@@ -90,7 +90,7 @@ const SUSPICIOUS_ARTIST = /@|\bid:|\byears of\b|\b(?:vol\.?|volume|episode|sessi
 /** Shorts captions are stuffed with hashtags ("... #dnb #newmusic #drumandbass"). Real uploads rarely have two or more in the title. */
 export const looksLikeShort = (raw: string) => /#shorts?\b/i.test(raw) || (raw.match(/#[^\s#]+/g) ?? []).length >= 2;
 
-export function parseTrack(raw: string, keepShorts = false): ParsedTrack | null {
+export function parseTrack(raw: string, keepShorts = false, fallbackArtist?: string): ParsedTrack | null {
   if (NOT_A_TRACK.test(raw)) return null;
   if (!keepShorts && looksLikeShort(raw)) return null;
   let t = raw.replace(EMOJI, " ").replace(HASHTAGS, "").replace(PROMO, "").replace(/\s+/g, " ").trim();
@@ -98,7 +98,11 @@ export function parseTrack(raw: string, keepShorts = false): ParsedTrack | null 
   t = t.replace(/\s*(\||\/\/)\s*[^|]*$/, "").trim(); // trailing "| Label"
   t = t.replace(/\s*\[[^\]]*\]\s*$/, "").trim(); // trailing "[LABEL]" tag
   const m = t.match(/^(.+?)\s+[-–—]\s+(.+)$/);
-  if (!m) return null;
+  if (!m) {
+    // An artist's own channel usually titles uploads with just the track name: use the channel's artist name.
+    if (fallbackArtist && t.length > 0 && t.length <= 160 && /[a-z0-9\u00C0-\uFFFF]/i.test(t)) return { artist: fallbackArtist, title: t, suspicious: /\|/.test(t) };
+    return null;
+  }
   const artist = m[1].trim(), title = m[2].trim();
   if (!artist || !title || artist.length > 120 || title.length > 160) return null;
   const suspicious = SUSPICIOUS_ARTIST.test(artist) || /\|/.test(artist + title) || !/[a-z0-9\u00C0-\uFFFF]/i.test(title);
