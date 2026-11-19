@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { Track, TrackRow } from "@/components/TrackList";
 import { DownloadPdfButton } from "@/components/DownloadPdfButton";
+import { Genre, GenreToggle } from "@/components/GenreToggle";
 
 type Row = { liked_at: string; tracks: Track };
 type SortKey = "liked" | "posted" | "artist" | "title";
@@ -20,6 +21,7 @@ export default function LikedClient() {
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
   const [channel, setChannel] = useState("");
+  const [genre, setGenre] = useState<Genre>("");
   const [sortKey, setSortKey] = useState<SortKey>("liked");
   const [asc, setAsc] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
@@ -50,15 +52,16 @@ export default function LikedClient() {
   }
 
   const channels = useMemo(
-    () => Array.from(new Set((rows ?? []).map((r) => r.tracks.source_name).filter(Boolean) as string[])).sort(),
-    [rows]
+    () => Array.from(new Set((rows ?? []).filter((r) => !genre || (r.tracks.genre ?? "dnb") === genre).map((r) => r.tracks.source_name).filter(Boolean) as string[])).sort(),
+    [rows, genre]
   );
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const list = (rows ?? []).filter((r) =>
       (!needle || `${r.tracks.title} ${r.tracks.artist_name}`.toLowerCase().includes(needle)) &&
-      (!channel || r.tracks.source_name === channel)
+      (!channel || r.tracks.source_name === channel) &&
+      (!genre || (r.tracks.genre ?? "dnb") === genre)
     );
     const text = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base" });
     return list.sort((a, b) => {
@@ -75,7 +78,12 @@ export default function LikedClient() {
       else r = text(a.tracks.title, b.tracks.title);
       return asc ? r : -r;
     });
-  }, [rows, q, channel, sortKey, asc]);
+  }, [rows, q, channel, genre, sortKey, asc]);
+
+  function pickGenre(g: Genre) {
+    setGenre(g);
+    if (channel && !(rows ?? []).some((r) => r.tracks.source_name === channel && (!g || (r.tracks.genre ?? "dnb") === g))) setChannel("");
+  }
 
   const selectedShown = shown.filter((r) => sel.has(r.tracks.id));
 
@@ -97,14 +105,15 @@ export default function LikedClient() {
     setTimeout(() => setCopied(""), 2500);
   }
 
-  if (!authed) return <p>Please <a className="text-[#c6ff00] underline" href="/login">sign in</a> to see your liked tracks.</p>;
+  if (!authed) return <p>Please <a className="text-[#c6ff00] underline" href="/login">sign in</a> to see your likes.</p>;
   const btn = "border border-white/20 px-3 py-1.5 text-xs uppercase tracking-widest hover:border-white/50";
   return (
     <>
-      <h1 className="mb-6 text-3xl font-black uppercase">Liked Tracks</h1>
+      <h1 className="mb-6 text-3xl font-black uppercase">Likes</h1>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search liked tracks" className="border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
+        <GenreToggle value={genre} onChange={pickGenre} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search likes" className="border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
         <select value={channel} onChange={(e) => setChannel(e.target.value)} className="border border-white/20 bg-black px-3 py-1.5 text-sm">
           <option value="">All channels</option>
           {channels.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -126,17 +135,17 @@ export default function LikedClient() {
         <button onClick={() => setSel(new Set())} disabled={!sel.size} className={btn}>Clear selection</button>
         {copied && <span className="text-sm text-[#c6ff00]">{copied}</span>}
         <div className="ml-auto">
-          <DownloadPdfButton title="Liked Tracks" tracks={shown.map((r) => ({ artist: r.tracks.artist_name, title: r.tracks.title }))} />
+          <DownloadPdfButton title="Likes" tracks={shown.map((r) => ({ artist: r.tracks.artist_name, title: r.tracks.title }))} />
         </div>
       </div>
 
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
-      {rows && !shown.length && <p className="text-white/50">{rows.length ? "No liked tracks match." : "Nothing here yet."}</p>}
+      {rows && !shown.length && <p className="text-white/50">{rows.length ? "No likes match." : "Nothing here yet."}</p>}
       <ul className="divide-y divide-white/10">
         {shown.map((r) => {
           const on = sel.has(r.tracks.id);
           return (
-            <TrackRow key={r.tracks.id} t={r.tracks} queue={shown.map((x) => x.tracks)} extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
+            <TrackRow key={r.tracks.id} t={r.tracks} showGenre={!genre} queue={shown.map((x) => x.tracks)} extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
               leading={
                 <button onClick={() => toggle(r.tracks.id)} aria-pressed={on} aria-label={on ? "Deselect track" : "Select track"}
                   className={`h-6 w-6 shrink-0 border text-sm font-bold leading-none ${on ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/30"}`}>

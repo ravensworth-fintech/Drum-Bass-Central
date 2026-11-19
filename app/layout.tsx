@@ -2,13 +2,13 @@ import "./globals.css";
 import Link from "next/link";
 import { AuthNav } from "@/components/AuthNav";
 import { PlayerProvider } from "@/components/PlayerProvider";
-export const metadata = { title: "D&B + House Discover" };
-const nav = [["/", "Discover"], ["/dnb", "D&B"], ["/house", "House"], ["/mixes", "Mixes"], ["/liked", "Liked Tracks"]];
+export const metadata = { title: "DropTheFire" };
+const nav = [["/", "Discover"], ["/dnb", "D&B"], ["/house", "House"], ["/mixes", "Mixes"], ["/liked", "Likes"]];
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en"><body><PlayerProvider>
       <header className="flex items-center gap-6 border-b border-white/10 px-6 py-4">
-        <span className="font-black uppercase tracking-widest text-[#c6ff00]">D&amp;B + House</span>
+        <Link href="/" className="font-black uppercase tracking-widest text-[#c6ff00]">DropTheFire</Link>
         {nav.map(([href, label]) => (
           <Link key={href} href={href} className="text-sm uppercase tracking-widest text-white/70 hover:text-white">{label}</Link>
         ))}

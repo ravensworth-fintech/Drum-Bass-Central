@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { Track, TrackRow } from "@/components/TrackList";
 import { Mix, MixTracklist } from "@/components/MixTracklist";
+import { Genre, GenreToggle } from "@/components/GenreToggle";
 
 const PAGE = 30;
 
@@ -12,8 +13,6 @@ const toTrack = (m: Mix): Track => ({
   source_name: m.show_or_channel, duration_seconds: m.duration_seconds, genre: m.genre,
 });
 
-type Genre = "" | "dnb" | "house";
-const GENRES: { key: Genre; label: string }[] = [{ key: "", label: "All" }, { key: "dnb", label: "D&B" }, { key: "house", label: "House" }];
 
 export function MixesBrowser({ initial, channels }: { initial: Mix[]; channels: { name: string; genre: string }[] }) {
   const [mixes, setMixes] = useState<Mix[]>(initial.slice(0, PAGE));
@@ -77,12 +76,7 @@ export function MixesBrowser({ initial, channels }: { initial: Mix[]; channels: 
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex">
-          {GENRES.map((g) => (
-            <button key={g.key} onClick={() => pickGenre(g.key)} aria-pressed={genre === g.key}
-              className={`border px-3 py-1.5 text-xs font-bold uppercase tracking-widest ${genre === g.key ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/20 text-white/70 hover:text-white"}`}>{g.label}</button>
-          ))}
-        </div>
+        <GenreToggle value={genre} onChange={pickGenre} />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search mixes, DJs or shows" className="border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
         <select value={channel} onChange={(e) => setChannel(e.target.value)} className="border border-white/20 bg-black px-3 py-1.5 text-sm">
           <option value="">All channels</option>

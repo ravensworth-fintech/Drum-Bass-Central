@@ -52,3 +52,8 @@ Each list shows 30 and "Load more" fetches the next 30. `/tracks` redirects to `
 Setup, in the Supabase SQL Editor, in this order: `supabase/add_house.sql` (adds the genre columns; existing rows stay D&B), then `supabase/seed_house.sql`
 (artists, labels and mix channels). Then open `/api/ingest?secret=...` repeatedly until `not_reached_run_again` is gone.
 Add a single House channel later: `/api/ingest?secret=...&name=Name&add=https://www.youtube.com/@Handle&genre=house`.
+
+## ADD + button (admins only)
+Run `supabase/make_me_admin.sql` once (with your login email) so your account has `profiles.is_admin = true`. The ADD + button then appears next to Sign out.
+Paste a YouTube channel link, pick D&B or House, and the site adds it to `sources`, scans it immediately (its newest ~15 uploads) and reloads.
+The route `/api/add-source` checks your login and `is_admin` on the server, so nobody else can add sources. Needs `SUPABASE_SERVICE_ROLE_KEY`.

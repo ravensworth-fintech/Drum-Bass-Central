@@ -56,7 +56,9 @@ export async function resolveByName(name: string, genre: "dnb" | "house" = "dnb"
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
     const title = html.slice(m.index, m.index + 900).match(/"title":\{"simpleText":"([^"]+)"/)?.[1];
-    if (title && namesMatch(name, decode(title))) return m[1];
+    // YouTube writes "&" as \u0026 inside this JSON, so "Chase & Status" would never match without unescaping.
+    const clean = title ? decode(title.replace(/\\u([0-9a-f]{4})/gi, (_, h: string) => String.fromCharCode(parseInt(h, 16))).replace(/\\"/g, '"')) : "";
+    if (clean && namesMatch(name, clean)) return m[1];
   }
   throw new Error(`No YouTube channel named "${name}" found by search. Paste its /channel/UC... URL into the source's url in Supabase.`);
 }
