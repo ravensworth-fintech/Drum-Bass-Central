@@ -5,7 +5,7 @@ import { fmtDur, scSearchUrl } from "./TrackList";
 
 export type Mix = {
   id: string; title: string; dj_name: string | null; show_or_channel: string | null; uploaded_at: string | null; duration_seconds: number | null;
-  artwork_url: string | null; source_url: string; embed_url: string | null; tracklist_status: string; tracklist_origin: string | null;
+  artwork_url: string | null; source_url: string; embed_url: string | null; tracklist_status: string; tracklist_origin: string | null; genre?: string;
 };
 type Entry = { position: number; artist_name: string | null; title: string | null; label_name: string | null; timestamp_seconds: number | null; tracklist_source_url: string };
 

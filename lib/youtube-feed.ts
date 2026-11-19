@@ -1,3 +1,4 @@
+import { VERSION_WORDS } from "./mixes";
 // YouTube channels publish a free public Atom feed (newest ~15 uploads). No API key or quota needed.
 export type FeedEntry = { videoId: string; title: string; publishedAt: string | null; isShort: boolean; description: string };
 export type ParsedTrack = { artist: string; title: string; suspicious: boolean };
@@ -49,8 +50,8 @@ export function namesMatch(sourceName: string, channelTitle: string): boolean {
 }
 
 /** Looks a channel up by name via YouTube's own search page. Only accepts a result whose name matches. */
-export async function resolveByName(name: string): Promise<string> {
-  const html = await fetchText(`https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} drum and bass`)}&sp=EgIQAg%253D%253D`);
+export async function resolveByName(name: string, genre: "dnb" | "house" = "dnb"): Promise<string> {
+  const html = await fetchText(`https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} ${genre === "house" ? "house music" : "drum and bass"}`)}&sp=EgIQAg%253D%253D`);
   const re = /"channelRenderer":\{"channelId":"(UC[\w-]{22})"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
@@ -76,8 +77,8 @@ export async function fetchChannelFeed(channelId: string): Promise<{ title: stri
 }
 
 // Titles that are clearly not single tracks.
-const NOT_A_TRACK =
-  /(?<!original |extended |club |vip |radio |dub |instrumental )\bmix\b|\bpodcast\b|\blive set\b|\blive at\b|\bepisode\b|\binterview\b|\btrailer\b|\bdocumentary\b|\bcompilation\b|\bmegamix\b|\bfull album\b|\bfestival\b|\baftermovie\b|\brecap\b|\bvlog\b|\btutorial\b|\bbehind the scenes\b|\bplaylist\b/i;
+const NOT_A_TRACK = new RegExp(
+  `(?<!${VERSION_WORDS})\\bmix\\b|\\bpodcast\\b|\\blive set\\b|\\blive at\\b|\\blive from\\b|\\bepisode\\b|\\binterview\\b|\\btrailer\\b|\\bdocumentary\\b|\\bcompilation\\b|\\bmegamix\\b|\\bfull album\\b|\\bfestival\\b|\\baftermovie\\b|\\brecap\\b|\\bvlog\\b|\\btutorial\\b|\\bbehind the scenes\\b|\\bplaylist\\b|\\bboiler room\\b`, "i");
 const NOISE = /\b(official|video|audio|visuali[sz]er|lyric|lyrics|out now|premiere|free download|clip|hq|hd)\b/i;
 
 const HASHTAGS = /\s*#[^\s#]+/g;

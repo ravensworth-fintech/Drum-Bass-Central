@@ -7,7 +7,7 @@ import { bestFromComments, fetchCommentTexts, find1001, parseTracklist, TLEntry 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-type Source = { id: string; name: string; url: string; platform_id: string | null; is_artist?: boolean };
+type Source = { id: string; name: string; url: string; platform_id: string | null; is_artist?: boolean; genre?: "dnb" | "house" };
 type SB = ReturnType<typeof admin>;
 const ytUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`;
 
@@ -35,7 +35,7 @@ async function scanSource(sb: ReturnType<typeof admin>, src: Source) {
         if (namesMatch(src.name, f.title)) { channelId = guess; feed = f; } else seen = f.title;
       } catch { /* fall through to the name search */ }
       if (!channelId) {
-        try { channelId = await resolveByName(src.name); }
+        try { channelId = await resolveByName(src.name, src.genre ?? "dnb"); }
         catch (e) {
           throw new Error(seen
             ? `The channel at ${src.url} is called "${seen}", which doesn't match "${src.name}", and a search found nothing better. If "${seen}" is right, rename this source to match in Supabase; otherwise set the correct url.`
@@ -61,8 +61,8 @@ async function scanSource(sb: ReturnType<typeof admin>, src: Source) {
     }
 
     // Sort each upload into: a track, a mix (DJ set / podcast / radio show), or skip.
-    type MixRow = { title: string; dj_name: string | null; show_or_channel: string; uploaded_at: string | null; duration_seconds: number | null; artwork_url: string; source_url: string; platform: string; platform_id: string; embed_url: string; tracklist_status: string; status: string };
-    const rows: { title: string; artist_name: string; source_url: string; platform: string; platform_id: string; embed_url: string; artwork_url: string; released_on: string | null; status: string; source_name: string; norm_key: string; duration_seconds: number | null }[] = [];
+    type MixRow = { title: string; dj_name: string | null; show_or_channel: string; uploaded_at: string | null; duration_seconds: number | null; artwork_url: string; source_url: string; platform: string; platform_id: string; embed_url: string; tracklist_status: string; status: string; genre: string };
+    const rows: { title: string; artist_name: string; source_url: string; platform: string; platform_id: string; embed_url: string; artwork_url: string; released_on: string | null; status: string; source_name: string; genre: string; norm_key: string; duration_seconds: number | null }[] = [];
     const mixRows: MixRow[] = [];
     for (const e of entries) {
       const dur = durations.get(e.videoId) ?? null;
@@ -72,7 +72,7 @@ async function scanSource(sb: ReturnType<typeof admin>, src: Source) {
         mixRows.push({
           title, dj_name: guessDj(title), show_or_channel: src.name, uploaded_at: e.publishedAt, duration_seconds: dur,
           artwork_url: `https://i.ytimg.com/vi/${e.videoId}/hqdefault.jpg`, source_url: ytUrl(e.videoId), platform: "youtube", platform_id: e.videoId,
-          embed_url: `https://www.youtube.com/embed/${e.videoId}`, tracklist_status: "none", status: "published",
+          embed_url: `https://www.youtube.com/embed/${e.videoId}`, tracklist_status: "none", status: "published", genre: src.genre ?? "dnb",
         });
         continue;
       }
@@ -89,6 +89,7 @@ async function scanSource(sb: ReturnType<typeof admin>, src: Source) {
         released_on: e.publishedAt ? e.publishedAt.slice(0, 10) : null,
         status: p.suspicious ? "pending" : "published", // pending = held for review, hidden from the site
         source_name: src.name,
+        genre: src.genre ?? "dnb",
         norm_key: normKey(p.artist, p.title),
         duration_seconds: dur,
       });
@@ -229,14 +230,15 @@ export async function GET(req: Request) {
   const sb = admin();
   const params = new URL(req.url).searchParams;
   const add = params.get("add");
-  if (add) { // /api/ingest?secret=...&name=Label Name&add=https://www.youtube.com/@Handle  (adds a source, or repoints an existing one with that name)
+  if (add) { // /api/ingest?secret=...&name=Label Name&add=https://www.youtube.com/@Handle&genre=house  (adds a source, or repoints an existing one with that name; genre is dnb or house)
     if (!/^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(add)) return NextResponse.json({ error: "add must be a youtube.com channel URL" }, { status: 400 });
     const name = params.get("name") || decodeURIComponent(add.split("/").filter(Boolean).pop() ?? "YouTube channel");
     try {
       const channelId = await resolveChannelId(add);
       const feed = await fetchChannelFeed(channelId); // shows you which channel you just connected
       const { data: existing } = await sb.from("sources").select("id").eq("name", name).limit(1);
-      const row = { url: add, platform_id: channelId, enabled: true };
+      const genreParam = params.get("genre");
+      const row = { url: add, platform_id: channelId, enabled: true, ...(genreParam === "house" || genreParam === "dnb" ? { genre: genreParam } : {}) };
       const { error } = existing?.length
         ? await sb.from("sources").update(row).eq("id", existing[0].id)
         : await sb.from("sources").insert({ name, kind: "youtube", monitorable: "auto", ...row });
@@ -273,7 +275,7 @@ export async function GET(req: Request) {
     catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
   }
   // Least-recently-scanned first, in small batches, within a time budget. If the list is long, a second run picks up the rest.
-  const { data: sources, error } = await sb.from("sources").select("id,name,url,platform_id,is_artist").eq("kind", "youtube").eq("enabled", true)
+  const { data: sources, error } = await sb.from("sources").select("id,name,url,platform_id,is_artist,genre").eq("kind", "youtube").eq("enabled", true)
     .order("last_success_at", { ascending: true, nullsFirst: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

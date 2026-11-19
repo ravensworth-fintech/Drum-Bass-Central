@@ -8,7 +8,7 @@ import { isYT, usePlayer } from "./PlayerProvider";
 export type Track = {
   id: string; title: string; artist_name: string; subgenre: string;
   artwork_url: string | null; source_url: string; embed_url: string | null; released_on: string | null; source_name: string | null;
-  duration_seconds?: number | null;
+  duration_seconds?: number | null; genre?: string;
 };
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -30,14 +30,16 @@ export const scSearchUrl = (q: string) => `https://soundcloud.com/search/sounds?
 
 const chip = "shrink-0 border border-white/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50 hover:border-[#c6ff00] hover:text-[#c6ff00]";
 
-export function TrackRow({ t, leading, extra, action, queue, below, noSC }: {
-  t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode; queue: Track[]; below?: React.ReactNode; noSC?: boolean;
+export const genreLabel = (g?: string) => (g === "house" ? "House" : "D&B");
+
+export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGenre }: {
+  t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode; queue: Track[]; below?: React.ReactNode; noSC?: boolean; showGenre?: boolean;
 }) {
   const { current, playing, play, toggle } = usePlayer();
   const isCur = current?.id === t.id;
   const li = useRef<HTMLLIElement>(null);
   useEffect(() => { if (isCur) li.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [isCur]);
-  const meta = [fmtDur(t.duration_seconds), t.subgenre !== "Unknown" ? t.subgenre : null, t.source_name, fmtDate(t.released_on), extra].filter(Boolean).join(" · ");
+  const meta = [showGenre ? genreLabel(t.genre) : null, fmtDur(t.duration_seconds), t.subgenre !== "Unknown" ? t.subgenre : null, t.source_name, fmtDate(t.released_on), extra].filter(Boolean).join(" · ");
   return (
     <li ref={li} className={`py-2 ${isCur ? "bg-white/5" : ""}`}>
       <div className="flex items-center gap-3">
@@ -63,7 +65,7 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC }: {
   );
 }
 
-export function TrackList({ tracks, title }: { tracks: Track[]; title: string }) {
+export function TrackList({ tracks, title, showGenre }: { tracks: Track[]; title: string; showGenre?: boolean }) {
   const [liked, setLiked] = useState<Set<string>>(new Set());
   useEffect(() => {
     const s = createClient();
@@ -84,7 +86,7 @@ export function TrackList({ tracks, title }: { tracks: Track[]; title: string })
       </div>
       <ul className="divide-y divide-white/10">
         {tracks.map((t) => (
-          <TrackRow key={t.id} t={t} queue={tracks}
+          <TrackRow key={t.id} t={t} queue={tracks} showGenre={showGenre}
             action={<LikeButton key={t.id + liked.has(t.id)} trackId={t.id} initiallyLiked={liked.has(t.id)} />} />
         ))}
       </ul>

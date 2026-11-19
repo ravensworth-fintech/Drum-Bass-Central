@@ -5,7 +5,8 @@ import { TrackList, Track, scSearchUrl } from "@/components/TrackList";
 
 const PAGE = 30;
 
-export function TracksBrowser({ initial, channels }: { initial: Track[]; channels: string[] }) {
+/** genre = "dnb" or "house" shows one genre; leave it out to show both (Discover). */
+export function TracksBrowser({ initial, channels, genre, label }: { initial: Track[]; channels: string[]; genre?: "dnb" | "house"; label: string }) {
   const [tracks, setTracks] = useState<Track[]>(initial.slice(0, PAGE));
   const [hasMore, setHasMore] = useState(initial.length > PAGE);
   const [q, setQ] = useState("");
@@ -25,6 +26,7 @@ export function TracksBrowser({ initial, channels }: { initial: Track[]; channel
       .range(offset, offset + PAGE); // PAGE + 1 rows: the extra one tells us there is more
     const term = q.trim().replace(/[,()%*\\]/g, " ").trim();
     if (term) query = query.or(`title.ilike.%${term}%,artist_name.ilike.%${term}%`);
+    if (genre) query = query.eq("genre", genre);
     if (channel) query = query.eq("source_name", channel);
     const { data, error } = await query;
     const all = (data ?? []) as Track[];
@@ -77,7 +79,7 @@ export function TracksBrowser({ initial, channels }: { initial: Track[]; channel
       </div>
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {tracks.length ? (
-        <TrackList tracks={tracks} title="Tracks" />
+        <TrackList tracks={tracks} title={label} showGenre={!genre} />
       ) : (
         !loading && <p className="text-white/50">{q || channel ? "No tracks match that search." : "No tracks yet."}</p>
       )}

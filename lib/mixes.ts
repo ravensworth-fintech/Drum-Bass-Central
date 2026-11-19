@@ -4,11 +4,14 @@ const HASHTAGS = /\s*#[^\s#]+/g;
 
 /** Never a track and never a mix: interviews, trailers, albums, vlogs... */
 export const SKIP_WORDS =
-  /\binterview\b|\btrailer\b|\bdocumentary\b|\bfull album\b|\baftermovie\b|\brecap\b|\bvlog\b|\btutorial\b|\bbehind the scenes\b|\bplaylist\b|\bcompilation\b/i;
+  /\binterview\b|\btrailer\b|\bdocumentary\b|\bfull album\b|\baftermovie\b|\brecap\b|\bvlog\b|\btutorial\b|\bbehind the scenes\b|\bplaylist\b|\bcompilation\b|\bbest of\b|\btop \d+\b/i;
+
+/** Words that make "... Mix" a version of one track (house labels use these constantly), not a DJ mix. */
+export const VERSION_WORDS = "original |extended |club |vip |radio |dub |instrumental |vocal |main |short |album |single |acoustic ";
 
 /** Mix-like titles. "Original Mix", "Club Mix" etc. are track versions and do not count. */
-export const MIXY =
-  /(?<!original |extended |club |vip |radio |dub |instrumental )\bmix\b|\bmegamix\b|\bmixtape\b|\bpodcast\b|\bradio show\b|\blive set\b|\blive at\b|\bdj set\b|\bb2b\b|\bmixed by\b|\bepisode\b|\b\d+ ?(?:hours?|hrs?)\b/i;
+export const MIXY = new RegExp(
+  `(?<!${VERSION_WORDS})\\bmix\\b|\\bmegamix\\b|\\bmixtape\\b|\\bpodcast\\b|\\bradio show\\b|\\blive set\\b|\\blive at\\b|\\blive from\\b|\\bdj set\\b|\\b(?:sunrise|sunset|closing|opening|warm-?up) set\\b|\\bboiler room\\b|\\bb2b\\b|\\bmixed by\\b|\\bepisode\\b|\\b\\d+ ?(?:hours?|hrs?)\\b`, "i");
 
 export const isMixTitle = (raw: string) => MIXY.test(raw);
 

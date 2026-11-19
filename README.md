@@ -45,3 +45,10 @@ Duplicates are hidden (`rejected`), never deleted, and any likes on them move to
 Password sign-in, account creation, and email link/code. Supabase -> Authentication -> URL Configuration: set Site URL to your
 Vercel address and add `https://YOUR-SITE.vercel.app/**` under Redirect URLs. For instant sign-up, turn off "Confirm email"
 under Providers -> Email.
+
+## House (second genre)
+Every source, track and mix has a `genre` (`dnb` or `house`). Tabs: Discover (both genres, newest first), D&B, House, Mixes (filter All / D&B / House).
+Each list shows 30 and "Load more" fetches the next 30. `/tracks` redirects to `/dnb`.
+Setup, in the Supabase SQL Editor, in this order: `supabase/add_house.sql` (adds the genre columns; existing rows stay D&B), then `supabase/seed_house.sql`
+(artists, labels and mix channels). Then open `/api/ingest?secret=...` repeatedly until `not_reached_run_again` is gone.
+Add a single House channel later: `/api/ingest?secret=...&name=Name&add=https://www.youtube.com/@Handle&genre=house`.
