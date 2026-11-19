@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-browser";
 import { AddSource } from "@/components/AddSource";
+import { IngestButton } from "@/components/IngestButton";
 
 export function AuthNav() {
   const [email, setEmail] = useState<string | null>(null);
@@ -25,7 +26,7 @@ export function AuthNav() {
   if (!email) return <Link href="/login" className="ml-auto text-sm text-white/50 hover:text-white">Sign in</Link>;
   return (
     <div className="ml-auto flex items-center gap-4 text-sm text-white/50">
-      {admin && <AddSource />}
+      {admin && <><IngestButton /><AddSource /></>}
       <span className="hidden max-w-[14rem] truncate sm:inline">{email}</span>
       <button onClick={async () => { await createClient().auth.signOut(); window.location.href = "/"; }} className="hover:text-white">Sign out</button>
     </div>

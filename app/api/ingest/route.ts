@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { admin } from "@/lib/supabase-admin";
 import { fetchChannelFeed, fetchDurations, looksLikeShort, normKey, parseTrack, resolveChannelId } from "@/lib/youtube-feed";
 import { bestFromComments, fetchCommentTexts, find1001, TLEntry } from "@/lib/tracklist";
-import { saveTracklist, scanSource, ytUrl, SB, Source } from "@/lib/scan-source";
+import { saveTracklist, ytUrl, SB } from "@/lib/scan-source";
+import { runIngest } from "@/lib/run-ingest";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -148,20 +149,11 @@ export async function GET(req: Request) {
     catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
   }
   // Least-recently-scanned first, in small batches, within a time budget. If the list is long, a second run picks up the rest.
-  const { data: sources, error } = await sb.from("sources").select("id,name,url,platform_id,is_artist,genre").eq("kind", "youtube").eq("enabled", true)
-    .order("last_success_at", { ascending: true, nullsFirst: true });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const started = Date.now();
-  const list = (sources ?? []) as Source[];
-  const results: unknown[] = [];
-  let i = 0;
-  for (; i < list.length && Date.now() - started < 40_000; i += 8) {
-    results.push(...(await Promise.all(list.slice(i, i + 8).map((s) => scanSource(sb, s)))));
-  }
-  const notReached = list.slice(i).map((s) => s.name);
-  return NextResponse.json({
-    ran_at: new Date().toISOString(), sources: list.length, scanned: results.length,
-    ...(notReached.length ? { not_reached_run_again: notReached } : {}), results,
-  });
+  try {
+    const r = await runIngest(sb);
+    return NextResponse.json({
+      ran_at: new Date().toISOString(), sources: r.total, scanned: r.results.length,
+      ...(r.notReached.length ? { not_reached_run_again: r.notReached } : {}), results: r.results,
+    });
+  } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
 }

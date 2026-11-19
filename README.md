@@ -61,3 +61,7 @@ The route `/api/add-source` checks your login and `is_admin` on the server, so n
 ## Bands (third genre)
 Run `supabase/add_bands.sql` once. The Bands tab shows only channels added with the Bands option in ADD +. It is tracks-only (no mixes), is left out of Discover,
 and appears in the Likes toggle. Tick "artist's own channel" for a band's own channel so uploads titled just with the song name get the band as artist.
+
+## INGEST button (admins only)
+Next to ADD +. Scans every enabled channel, works through the whole list in rounds (each round is one ~40 second server run), then reloads the page.
+It uses your sign-in (`/api/run-ingest`), so no secret goes in the address bar. The scheduled run in `vercel.json` is separate and still calls `/api/ingest` with `CRON_SECRET`.
