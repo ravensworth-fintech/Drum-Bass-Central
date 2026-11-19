@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { admin } from "@/lib/supabase-admin";
-import { fetchChannelFeed, fetchDurations, looksLikeShort, normKey, parseTrack, resolveChannelId } from "@/lib/youtube-feed";
+import { fetchChannelFeed, fetchDurations, looksLikeShort, namesMatch, normKey, parseTrack, resolveByName, resolveChannelId } from "@/lib/youtube-feed";
 import { cleanMixTitle, guessDj, isMixTitle, SKIP_WORDS } from "@/lib/mixes";
 import { bestFromComments, fetchCommentTexts, find1001, parseTracklist, TLEntry } from "@/lib/tracklist";
 
@@ -25,11 +25,27 @@ async function scanSource(sb: ReturnType<typeof admin>, src: Source) {
   let found = 0, added = 0, skipped = 0, mixesAdded = 0, tracklistsFound = 0;
   try {
     let channelId = src.platform_id;
+    let feed: Awaited<ReturnType<typeof fetchChannelFeed>> | null = null;
     if (!channelId) {
-      channelId = await resolveChannelId(src.url);
+      // First scan: find the channel and check its name matches, so a wrong @handle can't pull in someone else's uploads.
+      let seen = "";
+      try {
+        const guess = await resolveChannelId(src.url);
+        const f = await fetchChannelFeed(guess);
+        if (namesMatch(src.name, f.title)) { channelId = guess; feed = f; } else seen = f.title;
+      } catch { /* fall through to the name search */ }
+      if (!channelId) {
+        try { channelId = await resolveByName(src.name); }
+        catch (e) {
+          throw new Error(seen
+            ? `The channel at ${src.url} is called "${seen}", which doesn't match "${src.name}", and a search found nothing better. If "${seen}" is right, rename this source to match in Supabase; otherwise set the correct url.`
+            : (e instanceof Error ? e.message : String(e)));
+        }
+      }
       await sb.from("sources").update({ platform_id: channelId }).eq("id", src.id);
     }
-    const entries = await fetchChannelFeed(channelId);
+    if (!feed) feed = await fetchChannelFeed(channelId);
+    const entries = feed.entries;
     found = entries.length;
 
     // Backfill: tag tracks added before source_name existed.
@@ -219,6 +235,16 @@ export async function GET(req: Request) {
     const { error } = await sb.from("sources").upsert({ name, kind: "youtube", url: add, monitorable: "auto" }, { onConflict: "url", ignoreDuplicates: true });
     return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ added: { name, url: add }, next: "open /api/ingest to scan it" });
   }
+  if (params.get("sources")) { // quick health check: which channels are connected and which still need attention
+    const { data, error } = await sb.from("sources").select("name,url,platform_id,last_success_at,enabled").eq("kind", "youtube").order("name");
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const all = data ?? [];
+    return NextResponse.json({
+      total: all.length,
+      working: all.filter((x) => x.last_success_at).length,
+      never_worked: all.filter((x) => !x.last_success_at).map((x) => `${x.name} (${x.url})`),
+    });
+  }
   if (params.get("tracklists")) {
     try { return NextResponse.json({ tracklists: await tracklistJob(sb) }); }
     catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
@@ -231,10 +257,21 @@ export async function GET(req: Request) {
     try { return NextResponse.json({ cleanup: await cleanup(sb) }); }
     catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 }); }
   }
-  const { data: sources, error } = await sb.from("sources").select("id,name,url,platform_id").eq("kind", "youtube").eq("enabled", true);
+  // Least-recently-scanned first, in small batches, within a time budget. If the list is long, a second run picks up the rest.
+  const { data: sources, error } = await sb.from("sources").select("id,name,url,platform_id").eq("kind", "youtube").eq("enabled", true)
+    .order("last_success_at", { ascending: true, nullsFirst: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // One failing source never stops the others.
-  const results = await Promise.all((sources ?? []).map((s) => scanSource(sb, s as Source)));
-  return NextResponse.json({ ran_at: new Date().toISOString(), sources: results.length, results });
+  const started = Date.now();
+  const list = (sources ?? []) as Source[];
+  const results: unknown[] = [];
+  let i = 0;
+  for (; i < list.length && Date.now() - started < 40_000; i += 8) {
+    results.push(...(await Promise.all(list.slice(i, i + 8).map((s) => scanSource(sb, s)))));
+  }
+  const notReached = list.slice(i).map((s) => s.name);
+  return NextResponse.json({
+    ran_at: new Date().toISOString(), sources: list.length, scanned: results.length,
+    ...(notReached.length ? { not_reached_run_again: notReached } : {}), results,
+  });
 }

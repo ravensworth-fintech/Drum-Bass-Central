@@ -35,8 +35,34 @@ export async function resolveChannelId(input: string): Promise<string> {
   return m[1];
 }
 
-export async function fetchChannelFeed(channelId: string): Promise<FeedEntry[]> {
+const NAME_STOP = new Set(["official", "music", "records", "record", "recordings", "recording", "channel", "vevo", "topic", "the", "drum", "and", "bass", "dnb"]);
+const nameKey = (s: string) => {
+  const toks = s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, " ").split(/[^a-z0-9]+/).filter(Boolean);
+  const kept = toks.filter((t) => !NAME_STOP.has(t)).join("");
+  return kept || toks.join("");
+};
+/** True when a YouTube channel's name plausibly is the source we meant (guards against a wrong @handle). */
+export function namesMatch(sourceName: string, channelTitle: string): boolean {
+  const full = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  const a = nameKey(sourceName), b = nameKey(channelTitle);
+  return (!!a && a === b) || (!!full(sourceName) && full(sourceName) === full(channelTitle)); // exact match only: "Dimension" must not match "Dimension Cinema"
+}
+
+/** Looks a channel up by name via YouTube's own search page. Only accepts a result whose name matches. */
+export async function resolveByName(name: string): Promise<string> {
+  const html = await fetchText(`https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} drum and bass`)}&sp=EgIQAg%253D%253D`);
+  const re = /"channelRenderer":\{"channelId":"(UC[\w-]{22})"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    const title = html.slice(m.index, m.index + 900).match(/"title":\{"simpleText":"([^"]+)"/)?.[1];
+    if (title && namesMatch(name, decode(title))) return m[1];
+  }
+  throw new Error(`No YouTube channel named "${name}" found by search. Paste its /channel/UC... URL into the source's url in Supabase.`);
+}
+
+export async function fetchChannelFeed(channelId: string): Promise<{ title: string; entries: FeedEntry[] }> {
   const xml = await fetchText(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`);
+  const title = decode(xml.split("<entry>")[0].match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? "").trim();
   const entries = xml.match(/<entry>[\s\S]*?<\/entry>/g) ?? [];
   const out: FeedEntry[] = [];
   for (const e of entries) {
@@ -46,7 +72,7 @@ export async function fetchChannelFeed(channelId: string): Promise<FeedEntry[]> 
     const href = e.match(/<link[^>]*rel="alternate"[^>]*href="([^"]+)"/)?.[1] ?? "";
     out.push({ videoId, title: decode(title).trim(), publishedAt: e.match(/<published>([^<]+)</)?.[1] ?? null, isShort: href.includes("/shorts/"), description: decode(e.match(/<media:description>([\s\S]*?)<\/media:description>/)?.[1] ?? "") });
   }
-  return out;
+  return { title, entries: out };
 }
 
 // Titles that are clearly not single tracks.
