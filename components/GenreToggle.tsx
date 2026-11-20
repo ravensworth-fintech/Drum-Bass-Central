@@ -1,9 +1,9 @@
 "use client";
 import { useIsMobile } from "@/components/DeviceProvider";
-export type Genre = "" | "dnb" | "house" | "bands";
-const GENRES: { key: Genre; label: string }[] = [{ key: "", label: "All" }, { key: "dnb", label: "D&B" }, { key: "house", label: "House" }, { key: "bands", label: "Bands" }];
+export type Genre = "" | "dnb" | "house" | "dubstep" | "bands";
+const GENRES: { key: Genre; label: string }[] = [{ key: "", label: "All" }, { key: "dnb", label: "D&B" }, { key: "house", label: "House" }, { key: "dubstep", label: "Dubstep" }, { key: "bands", label: "Bands" }];
 
-/** The All / D&B / House pills (plus Bands where withBands is set). Mixes has no Bands: that tab is tracks-only. */
+/** The All / D&B / House / Dubstep pills (plus Bands where withBands is set). Mixes has no Bands: that tab is tracks-only. */
 export function GenreToggle({ value, onChange, withBands }: { value: Genre; onChange: (g: Genre) => void; withBands?: boolean }) {
   const m = useIsMobile();
   return (

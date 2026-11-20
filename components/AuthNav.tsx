@@ -25,6 +25,13 @@ export function AuthNav() {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const signOut = async () => { await createClient().auth.signOut(); window.location.href = "/"; };
 
   if (!ready) return <span className="ml-auto" />;
@@ -49,8 +56,17 @@ export function AuthNav() {
   return (
     <div className="ml-auto flex items-center gap-4 text-sm text-white/50">
       {admin && <><IngestButton /><AddSource /></>}
-      <span className="hidden max-w-[14rem] truncate sm:inline">{email}</span>
-      <button onClick={signOut} className="hover:text-white">Sign out</button>
+      <div className="relative">
+        {open && <button aria-hidden tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />}
+        <button onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}
+          className="relative z-50 flex items-center gap-1.5 text-white/70 hover:text-white">Account <span aria-hidden className="text-[10px]">{open ? "▴" : "▾"}</span></button>
+        {open && (
+          <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-64 border border-white/20 bg-black p-4 text-white shadow-xl">
+            <div className="truncate text-xs text-white/50">{email}</div>
+            <button role="menuitem" onClick={signOut} className="mt-3 w-full border border-white/20 py-2 text-xs uppercase tracking-widest text-white/70 hover:border-white/50 hover:text-white">Sign out</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

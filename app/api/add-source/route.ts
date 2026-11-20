@@ -4,6 +4,7 @@ import { fetchChannelFeed, resolveChannelId } from "@/lib/youtube-feed";
 import { Source } from "@/lib/scan-source";
 import { scanAny } from "@/lib/run-ingest";
 import { fetchScFeed, resolveScUser } from "@/lib/soundcloud-feed";
+import { GenreKey, parseGenre } from "@/lib/genres";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -11,7 +12,7 @@ export const maxDuration = 60;
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
 /**
- * Powers the ADD + button. Body: { url, genre: "dnb" | "house", isArtist?: boolean }.
+ * Powers the ADD + button. Body: { url, genre: "dnb" | "house" | "dubstep" | "bands", isArtist?: boolean }.
  * Only a signed-in admin (profiles.is_admin = true) may call it; the browser sends its Supabase login token.
  * Adds the channel to `sources`, scans it straight away and returns what it found.
  */
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
   let url = String(body.url ?? "").trim();
   if (!url) return fail("Paste a YouTube channel link.");
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
-  const genre = body.genre === "house" ? "house" : body.genre === "bands" ? "bands" : "dnb";
+  const genre = parseGenre(body.genre);
   if (/^https?:\/\/((www|m|on|feeds)\.)?soundcloud\.com\//i.test(url)) return addSoundcloud(sb, url, genre, body.isArtist !== false);
   if (!/^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(url)) return fail("That isn't a YouTube or SoundCloud link. Examples: https://www.youtube.com/@ChannelName or https://soundcloud.com/artistname");
 
@@ -63,7 +64,7 @@ export async function POST(req: Request) {
 }
 
 /** SoundCloud account (profile link or feeds.soundcloud.com RSS link): add it as a `soundcloud` source and scan its RSS feed now. */
-async function addSoundcloud(sb: ReturnType<typeof admin>, url: string, genre: "dnb" | "house" | "bands", isArtist: boolean) {
+async function addSoundcloud(sb: ReturnType<typeof admin>, url: string, genre: GenreKey, isArtist: boolean) {
   try {
     const userId = await resolveScUser(url);
     const feed = await fetchScFeed(userId);

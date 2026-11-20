@@ -5,12 +5,13 @@ import { LikeButton } from "./LikeButton";
 import { createClient } from "@/lib/supabase-browser";
 import { toggleLikeById } from "@/lib/likes";
 import { useIsMobile } from "./DeviceProvider";
+import { QueueIcon } from "./QueueIcon";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // ONE persistent YouTube player (official IFrame API) that lives in the layout. Because the same player keeps
 // running and just loads the next video, browsers let playback continue to the next track while the tab is in the background.
-type Ctx = { current: Track | null; playing: boolean; play: (t: Track, queue: Track[]) => void; toggle: () => void };
-const PlayerCtx = createContext<Ctx>({ current: null, playing: false, play: () => {}, toggle: () => {} });
+type Ctx = { current: Track | null; playing: boolean; play: (t: Track, queue: Track[]) => void; toggle: () => void; addToQueue: (t: Track) => void };
+const PlayerCtx = createContext<Ctx>({ current: null, playing: false, play: () => {}, toggle: () => {}, addToQueue: () => {} });
 export const usePlayer = () => useContext(PlayerCtx);
 
 export const isYT = (t: Track) => !!t.embed_url?.includes("youtube.com/embed/");
@@ -112,6 +113,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const queue = useRef<Track[]>([]);
   const cur = useRef<Track | null>(null);
   const stepRef = useRef<(d: 1 | -1) => void>(() => {});
+  // "Up Next": songs the person queued. They play first, in the order added; when it empties, playback resumes in the list
+  // after `anchor` (the last song that came from a list rather than from Up Next).
+  const upNextRef = useRef<Track[]>([]);
+  const anchor = useRef<Track | null>(null);
+  const [upNext, setUpNext] = useState<Track[]>([]);
+  const [showQueue, setShowQueue] = useState(false);
+  const setQueueList = useCallback((l: Track[]) => { upNextRef.current = l; setUpNext(l); }, []);
   const engine = useRef<"yt" | "sc">("yt");
   const scHost = useRef<HTMLDivElement>(null);
   const scw = useRef<any>(null);
@@ -186,13 +194,26 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [loadSCTrack]);
 
   stepRef.current = (d) => {
+    if (d === 1 && upNextRef.current.length) { // something is queued: play it before returning to the list
+      const [n, ...rest] = upNextRef.current;
+      setQueueList(rest);
+      load(n);
+      return;
+    }
     const q = queue.current;
-    const i = q.findIndex((x) => x.id === cur.current?.id);
+    const a = anchor.current ?? cur.current;
+    if (d === -1 && a && cur.current && cur.current.id !== a.id) { load(a); return; } // "previous" from a queued song goes back to where the list was left
+    const i = q.findIndex((x) => x.id === a?.id);
     const next = d === 1 ? q.slice(i + 1).find(isPlayable) : q.slice(0, Math.max(i, 0)).reverse().find(isPlayable);
-    if (next) load(next); else if (d === 1) setPlaying(false);
+    if (next) { anchor.current = next; load(next); } else if (d === 1) setPlaying(false);
   };
 
-  const play = useCallback((t: Track, list: Track[]) => { queue.current = list; load(t); }, [load]);
+  const play = useCallback((t: Track, list: Track[]) => { queue.current = list; anchor.current = t; load(t); }, [load]);
+  const addToQueue = useCallback((t: Track) => {
+    if (!isPlayable(t)) return;
+    if (!cur.current) { queue.current = [t]; anchor.current = t; load(t); return; } // nothing playing yet: just play it
+    setQueueList([...upNextRef.current, t]);
+  }, [load, setQueueList]);
   const toggle = useCallback(() => {
     if (engine.current === "sc") { scw.current?.toggle(); return; }
     const p = player.current;
@@ -202,10 +223,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const close = () => {
     if (ready.current) player.current.stopVideo();
     try { scw.current?.pause(); } catch { /* ignore */ }
-    cur.current = null; setCurrent(null); setPlaying(false);
+    cur.current = null; anchor.current = null; setQueueList([]); setShowQueue(false); setCurrent(null); setPlaying(false);
   };
 
-  const ctx = useMemo(() => ({ current, playing, play, toggle }), [current, playing, play, toggle]);
+  const ctx = useMemo(() => ({ current, playing, play, toggle, addToQueue }), [current, playing, play, toggle, addToQueue]);
   const getPlayer = useCallback(() => (engine.current === "sc" ? (scReady.current ? scAdapter : null) : ready.current ? player.current : null), [scAdapter]);
   // Keyboard shortcuts on every page: Space = play/pause, L = like, ←/→ = back/forward 5 seconds.
   useEffect(() => {
@@ -255,6 +276,33 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       <div ref={scHost} aria-hidden className="pointer-events-none fixed bottom-0 left-0 h-px w-px overflow-hidden opacity-0" /> {/* hidden SoundCloud player */}
       {current && <div className={mobile ? "h-24" : "h-36"} />} {/* keeps the last rows clear of the bar */}
       <div className={`fixed inset-x-0 z-50 border-t border-white/15 ${mobile ? "bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-black" : "bottom-0 bg-black/95 backdrop-blur"} ${current ? "" : "hidden"}`}>
+        {showQueue && current && (
+          <div className="absolute inset-x-0 bottom-full max-h-[50vh] overflow-y-auto border-t border-white/15 bg-black/95 backdrop-blur">
+            <div className="mx-auto max-w-5xl px-4 py-3">
+              <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-widest">
+                <span className="text-white/70">Up Next{upNext.length ? ` · ${upNext.length}` : ""}</span>
+                <span className="flex items-center gap-4">
+                  {upNext.length > 0 && <button onClick={() => setQueueList([])} className="text-white/50 hover:text-white">Clear</button>}
+                  <button onClick={() => setShowQueue(false)} aria-label="Close Up Next" className="text-white/50 hover:text-white">✕</button>
+                </span>
+              </div>
+              {upNext.length ? (
+                <ol className="divide-y divide-white/10">
+                  {upNext.map((q, i) => (
+                    <li key={`${q.id}-${i}`} className="flex items-center gap-3 py-1.5 text-sm">
+                      <span className="w-5 shrink-0 text-right text-xs tabular-nums text-white/40">{i + 1}</span>
+                      <span className="min-w-0 flex-1 truncate"><span className="font-semibold">{q.title}</span><span className="text-white/60"> – {q.artist_name}</span></span>
+                      <button onClick={() => setQueueList(upNextRef.current.filter((_, k) => k !== i))} aria-label={`Remove ${q.title} from Up Next`} className="px-2 text-white/40 hover:text-white">✕</button>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-sm text-white/50">Nothing queued. Tap “+ Next” on any song to add it here.</p>
+              )}
+              <p className="mt-2 text-[11px] text-white/35">When Up Next runs out, playback carries on from where the list left off.</p>
+            </div>
+          </div>
+        )}
         <div className="mx-auto max-w-5xl px-4">
         <Progress key={current?.id} getPlayer={getPlayer} compact={mobile} />
         <div className={`flex items-center ${mobile ? "gap-2 pb-2 pt-1" : "gap-3 py-2 sm:gap-5"}`}>
@@ -267,6 +315,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           <button onClick={toggle} aria-label={playing ? "Pause" : "Play"}
             className={`flex shrink-0 items-center justify-center bg-[#c6ff00] text-black hover:bg-white ${mobile ? "h-11 w-11 text-xl" : "h-14 w-14 text-2xl"}`}>{playing ? "⏸" : "▶"}</button>
           <button onClick={() => stepRef.current(1)} aria-label="Next track" className={skip}>⏭</button>
+          <button onClick={() => setShowQueue((v) => !v)} aria-label="Up Next" aria-expanded={showQueue} title="Up Next"
+            className={`relative flex shrink-0 items-center justify-center ${showQueue || upNext.length ? "text-[#c6ff00]" : "text-white/60 hover:text-white"} ${mobile ? "h-10 w-9" : "h-12 w-12"}`}>
+            <QueueIcon className={mobile ? "h-5 w-5" : "h-6 w-6"} />
+            {upNext.length > 0 && <span className="absolute right-0 top-1 min-w-[1rem] bg-[#c6ff00] px-1 text-center text-[10px] font-bold leading-4 text-black">{upNext.length}</span>}
+          </button>
           {current && current.kind !== "mix" && <PlayerLike key={current.id} trackId={current.id} />}
           <button onClick={close} aria-label="Close player" className={`text-white/40 hover:text-white ${mobile ? "px-1 text-base" : "ml-1 px-2 text-lg"}`}>✕</button>
         </div>

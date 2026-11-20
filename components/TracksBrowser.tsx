@@ -3,11 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { TrackList, Track, scSearchUrl } from "@/components/TrackList";
 import { useIsMobile } from "@/components/DeviceProvider";
+import { DISCOVER_GENRES, GenreKey } from "@/lib/genres";
 
 const PAGE = 30;
 
-/** genre shows one genre; leave it out for Discover, which shows D&B and House together (Bands stays on its own tab). */
-export function TracksBrowser({ initial, channels, genre, label }: { initial: Track[]; channels: string[]; genre?: "dnb" | "house" | "bands"; label: string }) {
+/** genre shows one genre; leave it out for Fresh Fire, which shows D&B, House and Dubstep together (Bands stays on its own tab). */
+export function TracksBrowser({ initial, channels, genre, label }: { initial: Track[]; channels: string[]; genre?: GenreKey; label: string }) {
   const m = useIsMobile();
   const [tracks, setTracks] = useState<Track[]>(initial.slice(0, PAGE));
   const [hasMore, setHasMore] = useState(initial.length > PAGE);
@@ -28,7 +29,7 @@ export function TracksBrowser({ initial, channels, genre, label }: { initial: Tr
       .range(offset, offset + PAGE); // PAGE + 1 rows: the extra one tells us there is more
     const term = q.trim().replace(/[,()%*\\]/g, " ").trim();
     if (term) query = query.or(`title.ilike.%${term}%,artist_name.ilike.%${term}%`);
-    query = genre ? query.eq("genre", genre) : query.in("genre", ["dnb", "house"]);
+    query = genre ? query.eq("genre", genre) : query.in("genre", DISCOVER_GENRES);
     if (channel) query = query.eq("source_name", channel);
     const { data, error } = await query;
     const all = (data ?? []) as Track[];

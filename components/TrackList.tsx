@@ -5,6 +5,7 @@ import { LikeButton } from "./LikeButton";
 import { DownloadPdfButton } from "./DownloadPdfButton";
 import { isPlayable, usePlayer } from "./PlayerProvider";
 import { useIsMobile } from "./DeviceProvider";
+import { QueueIcon } from "./QueueIcon";
 
 export type Track = {
   id: string; title: string; artist_name: string; subgenre: string;
@@ -51,20 +52,32 @@ export const scSearchUrl = (q: string) => `https://soundcloud.com/search/sounds?
 
 const chip = "shrink-0 border border-white/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/50 hover:border-[#c6ff00] hover:text-[#c6ff00]";
 
-export const genreLabel = (g?: string) => (g === "house" ? "House" : g === "bands" ? "Bands" : "D&B");
+export const genreLabel = (g?: string) => (g === "house" ? "House" : g === "dubstep" ? "Dubstep" : g === "bands" ? "Bands" : "D&B");
+/** Faint row tint used on Fresh Fire so the genres are easy to tell apart. */
+const genreTint = (g?: string) => (g === "house" ? "bg-indigo-300/[0.07]" : g === "dubstep" ? "bg-fuchsia-300/[0.07]" : "");
 
 export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGenre, tintHouse }: {
   t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode; queue: Track[]; below?: React.ReactNode; noSC?: boolean; showGenre?: boolean; tintHouse?: boolean;
 }) {
-  const { current, playing, play, toggle } = usePlayer();
+  const { current, playing, play, toggle, addToQueue } = usePlayer();
   const mobile = useIsMobile();
   const isCur = current?.id === t.id;
+  const [added, setAdded] = useState(false); // brief checkmark after adding to Up Next
+  useEffect(() => { if (!added) return; const id = setTimeout(() => setAdded(false), 1200); return () => clearTimeout(id); }, [added]);
+  const queueBtn = isPlayable(t) ? (
+    <button onClick={() => { addToQueue(t); setAdded(true); }} aria-label="Add to Up Next" title="Add to Up Next"
+      className={mobile
+        ? `flex h-11 w-10 shrink-0 items-center justify-center ${added ? "text-[#c6ff00]" : "text-white/60"}`
+        : `${chip} ${added ? "!border-[#c6ff00] !text-[#c6ff00]" : ""}`}>
+      {mobile ? (added ? "✓" : <QueueIcon />) : added ? "✓ Added" : "+ Next"}
+    </button>
+  ) : null;
   const li = useRef<HTMLLIElement>(null);
   useEffect(() => { if (isCur) li.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [isCur]);
   const meta = [showGenre ? genreLabel(t.genre) : null, fmtDur(t.duration_seconds), t.subgenre !== "Unknown" ? t.subgenre : null, t.source_name, fmtDate(t.released_on), extra].filter(Boolean).join(" · ");
   // Mobile row: big play/artwork target on the left, title / artist / details stacked, one action (the heart) on the right. No tiny link chips.
   if (mobile) return (
-    <li ref={li} className={`py-2.5 ${isCur ? "bg-white/5" : tintHouse && t.genre === "house" ? "bg-indigo-300/[0.07]" : ""}`}>
+    <li ref={li} className={`py-2.5 ${isCur ? "bg-white/5" : tintHouse ? genreTint(t.genre) : ""}`}>
       <div className="flex items-center gap-3">
         {leading}
         <button onClick={() => (isCur ? toggle() : play(t, queue))} disabled={!isPlayable(t)} aria-label={isCur && playing ? "Pause" : "Play"}
@@ -77,13 +90,14 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
           <div className="truncate text-sm text-white/60">{t.artist_name}</div>
           <div className="truncate text-xs text-white/40">{meta}</div>
         </div>
+        {queueBtn}
         {action}
       </div>
       {below}
     </li>
   );
   return (
-    <li ref={li} className={`py-2 ${isCur ? "bg-white/5" : tintHouse && t.genre === "house" ? "bg-indigo-300/[0.07]" : ""}`}>
+    <li ref={li} className={`py-2 ${isCur ? "bg-white/5" : tintHouse ? genreTint(t.genre) : ""}`}>
       <div className="flex items-center gap-3">
         {leading}
         <button onClick={() => (isCur ? toggle() : play(t, queue))} disabled={!isPlayable(t)} aria-label={isCur && playing ? "Pause" : "Play"}
@@ -100,6 +114,7 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
         <span className="hidden max-w-[22rem] shrink-0 truncate text-xs text-white/40 md:block">{meta}</span>
         {!noSC && <a href={scSearchUrl(`${t.artist_name} ${t.title}`)} target="_blank" rel="noreferrer" title="Search on SoundCloud" className={chip}>SC</a>}
         <a href={t.source_url} target="_blank" rel="noreferrer" title="Open original" className={chip}>{t.source_url.includes("youtube") ? "YT" : "↗"}</a>
+        {queueBtn}
         {action}
       </div>
       {below}

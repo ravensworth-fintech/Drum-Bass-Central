@@ -47,7 +47,7 @@ Vercel address and add `https://YOUR-SITE.vercel.app/**` under Redirect URLs. Fo
 under Providers -> Email.
 
 ## House (second genre)
-Every source, track and mix has a `genre` (`dnb` or `house`). Tabs: Discover (both genres, newest first), D&B, House, Mixes (filter All / D&B / House).
+Every source, track and mix has a `genre` (`dnb` or `house`). Tabs: Fresh Fire (all genres except Bands, newest first), D&B, House, Dubstep, Bands, Mixes (filter All / D&B / House / Dubstep), Likes.
 Each list shows 30 and "Load more" fetches the next 30. `/tracks` redirects to `/dnb`.
 Setup, in the Supabase SQL Editor, in this order: `supabase/add_house.sql` (adds the genre columns; existing rows stay D&B), then `supabase/seed_house.sql`
 (artists, labels and mix channels). Then open `/api/ingest?secret=...` repeatedly until `not_reached_run_again` is gone.
@@ -59,7 +59,7 @@ Paste a YouTube channel link, pick D&B or House, and the site adds it to `source
 The route `/api/add-source` checks your login and `is_admin` on the server, so nobody else can add sources. Needs `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Bands (third genre)
-Run `supabase/add_bands.sql` once. The Bands tab shows only channels added with the Bands option in ADD +. It is tracks-only (no mixes), is left out of Discover,
+Run `supabase/add_bands.sql` once. The Bands tab shows only channels added with the Bands option in ADD +. It is tracks-only (no mixes), is left out of Fresh Fire,
 and appears in the Likes toggle. Tick "artist's own channel" for a band's own channel so uploads titled just with the song name get the band as artist.
 
 ## INGEST button (admins only)
@@ -72,4 +72,15 @@ through its public RSS feed (newest uploads only), with the same track/mix sorti
 official Widget API. SoundCloud mixes get no automatic tracklist lookup (that job reads YouTube comments).
 
 ## Day dividers
-Track tabs (Discover, D&B, House, Bands) group songs under a thin dated line by release date; Mixes group by upload date; Likes group by date liked or date posted (when sorted by either).
+Track tabs (Fresh Fire, D&B, House, Dubstep, Bands) group songs under a thin dated line by release date; Mixes group by upload date; Likes group by date liked or date posted (when sorted by either).
+
+## Dubstep (fourth genre)
+Run `supabase/add_dubstep.sql` once, then `supabase/seed_dubstep.sql` (UKF Dubstep, Circus Records, Zeds Dead, Oliverse and more; handles are guesses that are checked by channel name on the first scan).
+Then press INGEST (or open `/api/ingest?secret=...` repeatedly). The ADD + button has a Dubstep option. Dubstep shows on Fresh Fire; to keep it off Fresh Fire, remove `"dubstep"` from `DISCOVER_GENRES` in `lib/genres.ts`.
+
+## Up Next (queue)
+Every playable song and mix has a "+ Next" button (a list-with-plus icon on phones). Songs you add play next, in the order you add them. When the queue runs out, playback continues from the song after the last one that came from a list.
+The queue button in the player bar (list icon, with a count) shows what's queued and lets you remove songs or clear it. Closing the player clears the queue; the queue is not saved across page reloads.
+
+## Keyboard shortcuts
+Space = play/pause, L = like, left/right arrows = back/forward 5 seconds (works on every page while a song is loaded; ignored while typing in a field).
