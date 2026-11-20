@@ -5,6 +5,8 @@ import { TrackList, Track, scSearchUrl } from "@/components/TrackList";
 import { useIsMobile } from "@/components/DeviceProvider";
 import { MultiGenreToggle } from "@/components/GenreToggle";
 import { usePlayer } from "@/components/PlayerProvider";
+import { CollapsibleSearch } from "@/components/CollapsibleSearch";
+import { MobileFilters } from "@/components/MobileFilters";
 import { DISCOVER_GENRES, GenreKey } from "@/lib/genres";
 
 const PAGE = 30;
@@ -27,6 +29,7 @@ export function TracksBrowser({ initial, channels, genre, label }: { initial: Tr
   const [genres, setGenres] = useState<GenreKey[]>([]); // Fresh Fire toggles: none pressed = all genres
   const [sortKey, setSortKey] = useState<SortKey>("posted");
   const [asc, setAsc] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false); // desktop: search focused, other controls tucked away
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const firstRun = useRef(true);
@@ -112,31 +115,39 @@ export function TracksBrowser({ initial, channels, genre, label }: { initial: Tr
   const dirBtn = <button onClick={() => setAsc(!asc)} className={btn}>{dirLabel}</button>;
   const scLink = q.trim() ? (
     <a href={scSearchUrl(q.trim())} target="_blank" rel="noreferrer"
-      className={`border border-white/20 px-3 text-xs uppercase tracking-widest hover:border-[#c6ff00] hover:text-[#c6ff00] ${m ? "py-2.5 text-center" : "py-1.5"}`}>Search SoundCloud ↗</a>
+      className={`shrink-0 whitespace-nowrap border border-white/20 px-3 text-xs uppercase tracking-widest hover:border-[#c6ff00] hover:text-[#c6ff00] ${m ? "py-2.5 text-center" : "py-1.5"}`}>Search SoundCloud ↗</a>
   ) : null;
+  const activeCount = (q.trim() ? 1 : 0) + (channel ? 1 : 0) + (genres.length ? 1 : 0) + (sortKey !== "posted" || asc ? 1 : 0);
 
   return (
     <div>
       {m ? (
-        <div className="mb-3 grid grid-cols-2 gap-2">
-          {!genre && <div className="col-span-2"><MultiGenreToggle values={genres} onToggle={toggleGenre} /></div>}
-          <div className="col-span-2">{search}</div>
-          {channelSel}
-          {sortSel}
-          <div className="col-span-2">{dirBtn}</div>
-          {scLink && <div className="col-span-2 flex flex-col">{scLink}</div>}
-          {loading && <span className="col-span-2 text-xs text-white/50">Loading…</span>}
-        </div>
+        <MobileFilters active={activeCount}>
+          <div className="grid grid-cols-2 gap-2">
+            {!genre && <div className="col-span-2"><MultiGenreToggle values={genres} onToggle={toggleGenre} /></div>}
+            <div className="col-span-2">{search}</div>
+            {channelSel}
+            {sortSel}
+            <div className="col-span-2">{dirBtn}</div>
+            {scLink && <div className="col-span-2 flex flex-col">{scLink}</div>}
+          </div>
+        </MobileFilters>
       ) : (
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          {!genre && <MultiGenreToggle values={genres} onToggle={toggleGenre} />}
-          {channelSel}
-          {sortSel}
-          {dirBtn}
+          {!searchOpen && (<>
+            {!genre && <MultiGenreToggle values={genres} onToggle={toggleGenre} />}
+            {channelSel}
+            {sortSel}
+            {dirBtn}
+          </>)}
           {loading && <span className="text-xs text-white/50">Loading…</span>}
-          <div className="ml-auto flex items-center gap-3">{scLink}{search}</div>
+          <div className={`flex items-center gap-3 ${searchOpen ? "min-w-0 flex-1" : "ml-auto"}`}>
+            {scLink}
+            <CollapsibleSearch value={q} onChange={setQ} placeholder="Search" open={searchOpen} onOpenChange={setSearchOpen} />
+          </div>
         </div>
       )}
+      {m && loading && <p className="mb-2 text-xs text-white/50">Loading…</p>}
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {tracks.length ? (
         <TrackList tracks={tracks} title={label} showGenre={!genre} tintHouse={!genre} owner={owner} dividers={sortKey === "posted"} />

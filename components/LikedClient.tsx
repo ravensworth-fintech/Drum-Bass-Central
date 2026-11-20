@@ -6,6 +6,8 @@ import { DownloadPdfButton } from "@/components/DownloadPdfButton";
 import { Genre, GenreToggle } from "@/components/GenreToggle";
 import { useIsMobile } from "@/components/DeviceProvider";
 import { usePlayer } from "@/components/PlayerProvider";
+import { CollapsibleSearch } from "@/components/CollapsibleSearch";
+import { MobileFilters } from "@/components/MobileFilters";
 
 type Row = { liked_at: string; tracks: Track };
 type SortKey = "liked" | "posted" | "artist" | "title";
@@ -31,6 +33,7 @@ export default function LikedClient() {
   const [asc, setAsc] = useState(false);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false); // desktop: search focused, other controls tucked away
 
   useEffect(() => {
     (async () => {
@@ -125,32 +128,38 @@ export default function LikedClient() {
       <h1 className="mb-4 text-2xl font-black uppercase sm:mb-6 sm:text-3xl">Likes</h1>
 
       {m ? (
-        <div className="mb-3 grid grid-cols-2 gap-2">
-          <div className="col-span-2"><GenreToggle value={genre} onChange={pickGenre} withBands /></div>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search likes" className={`col-span-2 bg-transparent ${field}`} />
-          <select value={channel} onChange={(e) => setChannel(e.target.value)} className={`bg-black ${field}`} aria-label="Channel">
-            <option value="">All channels</option>
-            {channels.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select value={sortKey} onChange={(e) => changeSort(e.target.value as SortKey)} className={`bg-black ${field}`} aria-label="Sort by">
-            {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
-          </select>
-          <button onClick={() => setAsc(!asc)} className={btn}>{dirLabel}</button>
-          <button onClick={() => { if (selectMode) setSel(new Set()); setSelectMode(!selectMode); }} aria-pressed={selectMode}
-            className={`${btn} ${selectMode ? "border-[#c6ff00] text-[#c6ff00]" : ""}`}>{selectMode ? "Done" : "Select"}</button>
-        </div>
+        <MobileFilters active={(q.trim() ? 1 : 0) + (channel ? 1 : 0) + (genre ? 1 : 0) + (sortKey !== "liked" || asc ? 1 : 0)}
+          trailing={<button onClick={() => { if (selectMode) setSel(new Set()); setSelectMode(!selectMode); }} aria-pressed={selectMode}
+            className={`${btn} ${selectMode ? "border-[#c6ff00] text-[#c6ff00]" : ""}`}>{selectMode ? "Done" : "Select"}</button>}>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="col-span-2"><GenreToggle value={genre} onChange={pickGenre} withBands /></div>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search likes" className={`col-span-2 bg-transparent ${field}`} />
+            <select value={channel} onChange={(e) => setChannel(e.target.value)} className={`bg-black ${field}`} aria-label="Channel">
+              <option value="">All channels</option>
+              {channels.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={sortKey} onChange={(e) => changeSort(e.target.value as SortKey)} className={`bg-black ${field}`} aria-label="Sort by">
+              {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
+            </select>
+            <button onClick={() => setAsc(!asc)} className={`col-span-2 ${btn}`}>{dirLabel}</button>
+          </div>
+        </MobileFilters>
       ) : (
         <div className="mb-3 flex flex-wrap items-center gap-3">
-          <GenreToggle value={genre} onChange={pickGenre} withBands />
-          <select value={channel} onChange={(e) => setChannel(e.target.value)} className={`bg-black ${field}`}>
-            <option value="">All channels</option>
-            {channels.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select value={sortKey} onChange={(e) => changeSort(e.target.value as SortKey)} className={`bg-black ${field}`} aria-label="Sort by">
-            {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
-          </select>
-          <button onClick={() => setAsc(!asc)} className={btn}>{dirLabel}</button>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search likes" className={`ml-auto bg-transparent ${field}`} />
+          {!searchOpen && (<>
+            <GenreToggle value={genre} onChange={pickGenre} withBands />
+            <select value={channel} onChange={(e) => setChannel(e.target.value)} className={`bg-black ${field}`}>
+              <option value="">All channels</option>
+              {channels.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <select value={sortKey} onChange={(e) => changeSort(e.target.value as SortKey)} className={`bg-black ${field}`} aria-label="Sort by">
+              {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
+            </select>
+            <button onClick={() => setAsc(!asc)} className={btn}>{dirLabel}</button>
+          </>)}
+          <div className={`flex items-center ${searchOpen ? "min-w-0 flex-1" : "ml-auto"}`}>
+            <CollapsibleSearch value={q} onChange={setQ} placeholder="Search likes" open={searchOpen} onOpenChange={setSearchOpen} />
+          </div>
         </div>
       )}
 
