@@ -7,6 +7,7 @@ import { MultiGenreToggle } from "@/components/GenreToggle";
 import { usePlayer } from "@/components/PlayerProvider";
 import { CollapsibleSearch } from "@/components/CollapsibleSearch";
 import { MobileFilters } from "@/components/MobileFilters";
+import { PlayActions } from "@/components/PlayActions";
 import { DISCOVER_GENRES, GenreKey } from "@/lib/genres";
 
 const PAGE = 30;
@@ -133,24 +134,31 @@ export function TracksBrowser({ initial, channels, genre, label }: { initial: Tr
           </div>
         </MobileFilters>
       ) : (
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          {!searchOpen && (<>
-            {!genre && <MultiGenreToggle values={genres} onToggle={toggleGenre} />}
-            {channelSel}
-            {sortSel}
-            {dirBtn}
-          </>)}
-          {loading && <span className="text-xs text-white/50">Loading…</span>}
-          <div className={`flex items-center gap-3 ${searchOpen ? "min-w-0 flex-1" : "ml-auto"}`}>
-            {scLink}
-            <CollapsibleSearch value={q} onChange={setQ} placeholder="Search" open={searchOpen} onOpenChange={setSearchOpen} />
+        <div className="mb-4 space-y-3">
+          {/* Row 1: genre buttons on the left, Shuffle / Random on the right */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>{!genre && <MultiGenreToggle values={genres} onToggle={toggleGenre} />}</div>
+            {tracks.length > 0 && <PlayActions bare tracks={tracks} owner={owner} />}
+          </div>
+          {/* Row 2: channel, sort and search (search grows and tucks the others away while you type) */}
+          <div className="flex flex-wrap items-center gap-3">
+            {!searchOpen && (<>
+              {channelSel}
+              {sortSel}
+              {dirBtn}
+            </>)}
+            {loading && <span className="text-xs text-white/50">Loading…</span>}
+            <div className={`flex items-center gap-3 ${searchOpen ? "min-w-0 flex-1" : "ml-auto"}`}>
+              {scLink}
+              <CollapsibleSearch value={q} onChange={setQ} placeholder="Search" open={searchOpen} onOpenChange={setSearchOpen} />
+            </div>
           </div>
         </div>
       )}
       {m && loading && <p className="mb-2 text-xs text-white/50">Loading…</p>}
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {tracks.length ? (
-        <TrackList tracks={tracks} title={label} showGenre={!genre} tintHouse={!genre} owner={owner} dividers={sortKey === "posted"} />
+        <TrackList tracks={tracks} title={label} showGenre={!genre} tintHouse={!genre} owner={owner} dividers={sortKey === "posted"} hideActions={!m} />
       ) : (
         !loading && <p className="text-white/50">{q || channel || genres.length ? "No tracks match that search." : "No tracks yet."}</p>
       )}

@@ -124,7 +124,7 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
   );
 }
 
-export function TrackList({ tracks, title, showGenre, tintHouse, owner, dividers = true }: { tracks: Track[]; title: string; showGenre?: boolean; tintHouse?: boolean; owner?: string; dividers?: boolean }) {
+export function TrackList({ tracks, title, showGenre, tintHouse, owner, dividers = true, hideActions }: { tracks: Track[]; title: string; showGenre?: boolean; tintHouse?: boolean; owner?: string; dividers?: boolean; hideActions?: boolean }) {
   const mobile = useIsMobile();
   const pdfTracks = useMemo(() => tracks.map((t) => ({ artist: t.artist_name, title: t.title })), [tracks]);
   usePublishPdf(title, pdfTracks); // the Account menu's "Download PDF" exports what this list shows
@@ -143,7 +143,7 @@ export function TrackList({ tracks, title, showGenre, tintHouse, owner, dividers
 
   return (
     <div>
-      <PlayActions tracks={tracks} owner={owner} />
+      {!hideActions && <PlayActions tracks={tracks} owner={owner} />}
       <ul className="divide-y divide-white/10">
         {tracks.flatMap((t, i) => {
           const day = dayKey(t.released_on);

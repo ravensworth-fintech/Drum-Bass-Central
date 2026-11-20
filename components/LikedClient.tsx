@@ -147,20 +147,27 @@ export default function LikedClient() {
           </div>
         </MobileFilters>
       ) : (
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          {!searchOpen && (<>
+        <div className="mb-3 space-y-3">
+          {/* Row 1: genre buttons on the left, Shuffle / Random on the right */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <GenreToggle value={genre} onChange={pickGenre} withBands />
-            <select value={channel} onChange={(e) => setChannel(e.target.value)} className={`bg-black ${field}`}>
-              <option value="">All channels</option>
-              {channels.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <select value={sortKey} onChange={(e) => changeSort(e.target.value as SortKey)} className={`bg-black ${field}`} aria-label="Sort by">
-              {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
-            </select>
-            <button onClick={() => setAsc(!asc)} className={btn}>{dirLabel}</button>
-          </>)}
-          <div className={`flex items-center ${searchOpen ? "min-w-0 flex-1" : "ml-auto"}`}>
-            <CollapsibleSearch value={q} onChange={setQ} placeholder="Search likes" open={searchOpen} onOpenChange={setSearchOpen} />
+            {shown.length > 0 && <PlayActions bare tracks={shownTracks} owner="liked" />}
+          </div>
+          {/* Row 2: channel, sort and search */}
+          <div className="flex flex-wrap items-center gap-3">
+            {!searchOpen && (<>
+              <select value={channel} onChange={(e) => setChannel(e.target.value)} className={`bg-black ${field}`}>
+                <option value="">All channels</option>
+                {channels.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={sortKey} onChange={(e) => changeSort(e.target.value as SortKey)} className={`bg-black ${field}`} aria-label="Sort by">
+                {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
+              </select>
+              <button onClick={() => setAsc(!asc)} className={btn}>{dirLabel}</button>
+            </>)}
+            <div className={`flex items-center ${searchOpen ? "min-w-0 flex-1" : "ml-auto"}`}>
+              <CollapsibleSearch value={q} onChange={setQ} placeholder="Search likes" open={searchOpen} onOpenChange={setSearchOpen} />
+            </div>
           </div>
         </div>
       )}
@@ -179,7 +186,7 @@ export default function LikedClient() {
 
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {rows && !shown.length && <p className="text-white/50">{rows.length ? "No likes match." : "Nothing here yet."}</p>}
-      {shown.length > 0 && <PlayActions tracks={shownTracks} owner="liked" />}
+      {m && shown.length > 0 && <PlayActions tracks={shownTracks} owner="liked" />}
       <ul className="divide-y divide-white/10">
         {shown.flatMap((r, i) => {
           const on = sel.has(r.tracks.id);
