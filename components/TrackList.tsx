@@ -56,8 +56,9 @@ export const genreLabel = (g?: string) => (g === "house" ? "House" : g === "dubs
 /** Faint row tint used on Fresh Fire so the genres are easy to tell apart. */
 const genreTint = (g?: string) => (g === "house" ? "bg-indigo-300/[0.07]" : g === "dubstep" ? "bg-fuchsia-300/[0.07]" : "");
 
-export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGenre, tintHouse }: {
-  t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode; queue: Track[]; below?: React.ReactNode; noSC?: boolean; showGenre?: boolean; tintHouse?: boolean;
+/** `owner` names the list this row belongs to (e.g. "liked"). The list can then tell the player when its visible tracks change, so auto-play follows what is on screen. */
+export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGenre, tintHouse, owner }: {
+  t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode; queue: Track[]; below?: React.ReactNode; noSC?: boolean; showGenre?: boolean; tintHouse?: boolean; owner?: string;
 }) {
   const { current, playing, play, toggle, addToQueue } = usePlayer();
   const mobile = useIsMobile();
@@ -80,7 +81,7 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
     <li ref={li} className={`py-2.5 ${isCur ? "bg-white/5" : tintHouse ? genreTint(t.genre) : ""}`}>
       <div className="flex items-center gap-3">
         {leading}
-        <button onClick={() => (isCur ? toggle() : play(t, queue))} disabled={!isPlayable(t)} aria-label={isCur && playing ? "Pause" : "Play"}
+        <button onClick={() => (isCur ? toggle() : play(t, queue, owner))} disabled={!isPlayable(t)} aria-label={isCur && playing ? "Pause" : "Play"}
           className="relative h-14 w-14 shrink-0 overflow-hidden bg-white/10">
           {t.artwork_url && <img src={t.artwork_url} alt="" loading="lazy" className="h-full w-full object-cover" />}
           {isPlayable(t) && <span className={`absolute inset-0 flex items-center justify-center text-base ${isCur ? "bg-black/60 text-[#c6ff00]" : "bg-black/40"}`}>{isCur && playing ? "❚❚" : "▶"}</span>}
@@ -100,7 +101,7 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
     <li ref={li} className={`py-2 ${isCur ? "bg-white/5" : tintHouse ? genreTint(t.genre) : ""}`}>
       <div className="flex items-center gap-3">
         {leading}
-        <button onClick={() => (isCur ? toggle() : play(t, queue))} disabled={!isPlayable(t)} aria-label={isCur && playing ? "Pause" : "Play"}
+        <button onClick={() => (isCur ? toggle() : play(t, queue, owner))} disabled={!isPlayable(t)} aria-label={isCur && playing ? "Pause" : "Play"}
           className="group relative h-11 w-11 shrink-0 overflow-hidden bg-white/10">
           {t.artwork_url && <img src={t.artwork_url} alt="" loading="lazy" className="h-full w-full object-cover" />}
           {isPlayable(t) && (
@@ -122,7 +123,7 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
   );
 }
 
-export function TrackList({ tracks, title, showGenre, tintHouse }: { tracks: Track[]; title: string; showGenre?: boolean; tintHouse?: boolean }) {
+export function TrackList({ tracks, title, showGenre, tintHouse, owner, dividers = true }: { tracks: Track[]; title: string; showGenre?: boolean; tintHouse?: boolean; owner?: string; dividers?: boolean }) {
   const mobile = useIsMobile();
   const [liked, setLiked] = useState<Set<string>>(new Set());
   useEffect(() => {
@@ -146,9 +147,9 @@ export function TrackList({ tracks, title, showGenre, tintHouse }: { tracks: Tra
         {tracks.flatMap((t, i) => {
           const day = dayKey(t.released_on);
           const rows: React.ReactNode[] = [];
-          if (day && day !== (i ? dayKey(tracks[i - 1].released_on) : null)) rows.push(<DayDivider key={`day-${day}-${i}`} day={day} />);
+          if (dividers && day && day !== (i ? dayKey(tracks[i - 1].released_on) : null)) rows.push(<DayDivider key={`day-${day}-${i}`} day={day} />);
           rows.push(
-            <TrackRow key={t.id} t={t} queue={tracks} showGenre={showGenre} tintHouse={tintHouse}
+            <TrackRow key={t.id} t={t} queue={tracks} showGenre={showGenre} tintHouse={tintHouse} owner={owner}
               action={<LikeButton key={t.id + liked.has(t.id)} trackId={t.id} initiallyLiked={liked.has(t.id)} className={mobile ? "flex h-11 w-11 items-center justify-center text-2xl" : ""} />} />
           );
           return rows;

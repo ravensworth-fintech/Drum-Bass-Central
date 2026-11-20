@@ -10,8 +10,8 @@ import { QueueIcon } from "./QueueIcon";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // ONE persistent YouTube player (official IFrame API) that lives in the layout. Because the same player keeps
 // running and just loads the next video, browsers let playback continue to the next track while the tab is in the background.
-type Ctx = { current: Track | null; playing: boolean; play: (t: Track, queue: Track[]) => void; toggle: () => void; addToQueue: (t: Track) => void };
-const PlayerCtx = createContext<Ctx>({ current: null, playing: false, play: () => {}, toggle: () => {}, addToQueue: () => {} });
+type Ctx = { current: Track | null; playing: boolean; play: (t: Track, queue: Track[], owner?: string) => void; toggle: () => void; addToQueue: (t: Track) => void; updateQueue: (list: Track[], owner: string) => void };
+const PlayerCtx = createContext<Ctx>({ current: null, playing: false, play: () => {}, toggle: () => {}, addToQueue: () => {}, updateQueue: () => {} });
 export const usePlayer = () => useContext(PlayerCtx);
 
 export const isYT = (t: Track) => !!t.embed_url?.includes("youtube.com/embed/");
@@ -117,6 +117,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // after `anchor` (the last song that came from a list rather than from Up Next).
   const upNextRef = useRef<Track[]>([]);
   const anchor = useRef<Track | null>(null);
+  const atStart = useRef(false); // true when the playing song was filtered out and the next one is the first visible track
+  const queueOwner = useRef<string | null>(null); // which on-screen list the playing queue came from
   const [upNext, setUpNext] = useState<Track[]>([]);
   const [showQueue, setShowQueue] = useState(false);
   const setQueueList = useCallback((l: Track[]) => { upNextRef.current = l; setUpNext(l); }, []);
@@ -201,17 +203,34 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const q = queue.current;
-    const a = anchor.current ?? cur.current;
+    const a = anchor.current ?? (atStart.current ? null : cur.current);
     if (d === -1 && a && cur.current && cur.current.id !== a.id) { load(a); return; } // "previous" from a queued song goes back to where the list was left
     const i = q.findIndex((x) => x.id === a?.id);
     const next = d === 1 ? q.slice(i + 1).find(isPlayable) : q.slice(0, Math.max(i, 0)).reverse().find(isPlayable);
-    if (next) { anchor.current = next; load(next); } else if (d === 1) setPlaying(false);
+    if (next) { anchor.current = next; atStart.current = false; load(next); } else if (d === 1) setPlaying(false);
   };
 
-  const play = useCallback((t: Track, list: Track[]) => { queue.current = list; anchor.current = t; load(t); }, [load]);
+  const play = useCallback((t: Track, list: Track[], owner?: string) => { queue.current = list; queueOwner.current = owner ?? null; anchor.current = t; atStart.current = false; load(t); }, [load]);
+  // The list the person is playing from changed on screen (genre buttons, search, sort, load more): auto-play follows the visible tracks.
+  // If the playing song was filtered out, playback continues with the first visible track that came after it.
+  const updateQueue = useCallback((list: Track[], owner: string) => {
+    if (queueOwner.current !== owner || !cur.current) return;
+    const old = queue.current;
+    queue.current = list;
+    if (atStart.current) return; // already waiting to start from the top of the visible list
+    const a = anchor.current ?? cur.current;
+    if (list.some((x) => x.id === a.id)) return;
+    const visible = new Set(list.map((x) => x.id));
+    const oi = old.findIndex((x) => x.id === a.id);
+    const next = oi >= 0 ? old.slice(oi + 1).find((x) => visible.has(x.id)) : undefined;
+    if (!next) { anchor.current = list[list.length - 1] ?? null; return; } // nothing visible after it: the list ends here
+    const ni = list.findIndex((x) => x.id === next.id);
+    anchor.current = ni > 0 ? list[ni - 1] : null; // so "next" lands on `next`
+    atStart.current = ni === 0;
+  }, []);
   const addToQueue = useCallback((t: Track) => {
     if (!isPlayable(t)) return;
-    if (!cur.current) { queue.current = [t]; anchor.current = t; load(t); return; } // nothing playing yet: just play it
+    if (!cur.current) { queue.current = [t]; queueOwner.current = null; anchor.current = t; atStart.current = false; load(t); return; } // nothing playing yet: just play it
     setQueueList([...upNextRef.current, t]);
   }, [load, setQueueList]);
   const toggle = useCallback(() => {
@@ -223,10 +242,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const close = () => {
     if (ready.current) player.current.stopVideo();
     try { scw.current?.pause(); } catch { /* ignore */ }
-    cur.current = null; anchor.current = null; setQueueList([]); setShowQueue(false); setCurrent(null); setPlaying(false);
+    cur.current = null; anchor.current = null; atStart.current = false; setQueueList([]); setShowQueue(false); setCurrent(null); setPlaying(false);
   };
 
-  const ctx = useMemo(() => ({ current, playing, play, toggle, addToQueue }), [current, playing, play, toggle, addToQueue]);
+  const ctx = useMemo(() => ({ current, playing, play, toggle, addToQueue, updateQueue }), [current, playing, play, toggle, addToQueue, updateQueue]);
   const getPlayer = useCallback(() => (engine.current === "sc" ? (scReady.current ? scAdapter : null) : ready.current ? player.current : null), [scAdapter]);
   // Keyboard shortcuts on every page: Space = play/pause, L = like, ←/→ = back/forward 5 seconds.
   useEffect(() => {
@@ -299,7 +318,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
               ) : (
                 <p className="text-sm text-white/50">Nothing queued. Tap “+ Next” on any song to add it here.</p>
               )}
-              <p className="mt-2 text-[11px] text-white/35">When Up Next runs out, playback carries on from where the list left off.</p>
             </div>
           </div>
         )}

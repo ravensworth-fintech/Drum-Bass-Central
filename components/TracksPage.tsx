@@ -1,11 +1,11 @@
 import { db } from "@/lib/supabase-server";
 import { Track } from "@/components/TrackList";
-import { TracksBrowser } from "@/components/TracksBrowser";
+import { TracksBrowser, ChannelInfo } from "@/components/TracksBrowser";
 import { DISCOVER_GENRES, GenreKey } from "@/lib/genres";
 
 /** Shared by Fresh Fire (D&B + House + Dubstep), D&B, House, Dubstep and Bands. The first 30 tracks are drawn on the server; "Load more" fetches the next 30. */
 export async function TracksPage({ genre, heading }: { genre?: GenreKey; heading: string }) {
-  let initial: Track[] = [], channels: string[] = [], error = "";
+  let initial: Track[] = [], channels: ChannelInfo[] = [], error = "";
   try {
     let first = db().from("tracks").select("*")
       .order("released_on", { ascending: false, nullsFirst: false })
@@ -15,10 +15,12 @@ export async function TracksPage({ genre, heading }: { genre?: GenreKey; heading
     first = genre ? first.eq("genre", genre) : first.in("genre", DISCOVER_GENRES);
     const res = await first;
     if (res.error) error = res.error.message; else initial = (res.data ?? []) as Track[];
-    let ch = db().from("tracks").select("source_name").not("source_name", "is", null).limit(1000);
+    let ch = db().from("tracks").select("source_name,genre").not("source_name", "is", null).limit(1000);
     ch = genre ? ch.eq("genre", genre) : ch.in("genre", DISCOVER_GENRES);
     const cr = await ch;
-    channels = Array.from(new Set((cr.data ?? []).map((r) => r.source_name as string))).sort((a, b) => a.localeCompare(b));
+    const seen = new Map<string, ChannelInfo>();
+    for (const r of cr.data ?? []) seen.set(`${r.genre}|${r.source_name}`, { name: r.source_name as string, genre: r.genre as string });
+    channels = Array.from(seen.values()).sort((a, b) => a.name.localeCompare(b.name));
   } catch (e) { error = String(e); }
   return (
     <>

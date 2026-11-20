@@ -5,6 +5,7 @@ import { DayDivider, Track, TrackRow, dayKey } from "@/components/TrackList";
 import { DownloadPdfButton } from "@/components/DownloadPdfButton";
 import { Genre, GenreToggle } from "@/components/GenreToggle";
 import { useIsMobile } from "@/components/DeviceProvider";
+import { usePlayer } from "@/components/PlayerProvider";
 
 type Row = { liked_at: string; tracks: Track };
 type SortKey = "liked" | "posted" | "artist" | "title";
@@ -18,6 +19,7 @@ const SORTS: { key: SortKey; label: string }[] = [
 
 export default function LikedClient() {
   const m = useIsMobile();
+  const { updateQueue } = usePlayer();
   const [selectMode, setSelectMode] = useState(false); // phones: checkboxes + copy/select buttons only appear in Select mode
   const [rows, setRows] = useState<Row[] | null>(null);
   const [authed, setAuthed] = useState(true);
@@ -83,6 +85,10 @@ export default function LikedClient() {
     });
   }, [rows, q, channel, genre, sortKey, asc]);
 
+  // What is shown is what auto-play follows: filter, search or sort and the next track changes with it.
+  const shownTracks = useMemo(() => shown.map((r) => r.tracks), [shown]);
+  useEffect(() => { updateQueue(shownTracks, "liked"); }, [shownTracks, updateQueue]);
+
   function pickGenre(g: Genre) {
     setGenre(g);
     if (channel && !(rows ?? []).some((r) => r.tracks.source_name === channel && (!g || (r.tracks.genre ?? "dnb") === g))) setChannel("");
@@ -136,7 +142,6 @@ export default function LikedClient() {
       ) : (
         <div className="mb-3 flex flex-wrap items-center gap-3">
           <GenreToggle value={genre} onChange={pickGenre} withBands />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search likes" className={`bg-transparent ${field}`} />
           <select value={channel} onChange={(e) => setChannel(e.target.value)} className={`bg-black ${field}`}>
             <option value="">All channels</option>
             {channels.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -145,6 +150,7 @@ export default function LikedClient() {
             {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
           </select>
           <button onClick={() => setAsc(!asc)} className={btn}>{dirLabel}</button>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search likes" className={`ml-auto bg-transparent ${field}`} />
         </div>
       )}
 
@@ -173,7 +179,7 @@ export default function LikedClient() {
           const day = dayOf(r);
           const divider = day && day !== (i ? dayOf(shown[i - 1]) : null) ? [<DayDivider key={`day-${day}-${i}`} day={day} />] : [];
           return [...divider,
-            <TrackRow key={r.tracks.id} t={r.tracks} showGenre={!genre} queue={shown.map((x) => x.tracks)} extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
+            <TrackRow key={r.tracks.id} t={r.tracks} showGenre={!genre} queue={shownTracks} owner="liked" extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
               leading={showBoxes ? (
                 <button onClick={() => toggle(r.tracks.id)} aria-pressed={on} aria-label={on ? "Deselect track" : "Select track"}
                   className={`shrink-0 border text-sm font-bold leading-none ${m ? "h-8 w-8" : "h-6 w-6"} ${on ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/30"}`}>
