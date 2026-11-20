@@ -6,12 +6,14 @@ import { createClient } from "@/lib/supabase-browser";
 import { toggleLikeById } from "@/lib/likes";
 import { useIsMobile } from "./DeviceProvider";
 import { QueueIcon } from "./QueueIcon";
+import { ShuffleIcon } from "./PlayIcons";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // ONE persistent YouTube player (official IFrame API) that lives in the layout. Because the same player keeps
 // running and just loads the next video, browsers let playback continue to the next track while the tab is in the background.
-type Ctx = { current: Track | null; playing: boolean; play: (t: Track, queue: Track[], owner?: string) => void; toggle: () => void; addToQueue: (t: Track) => void; updateQueue: (list: Track[], owner: string) => void };
-const PlayerCtx = createContext<Ctx>({ current: null, playing: false, play: () => {}, toggle: () => {}, addToQueue: () => {}, updateQueue: () => {} });
+type Ctx = { current: Track | null; playing: boolean; play: (t: Track, queue: Track[], owner?: string) => void; toggle: () => void; addToQueue: (t: Track) => void; updateQueue: (list: Track[], owner: string) => void;
+  shuffle: boolean; setShuffle: (on: boolean) => void; shuffleFrom: (list: Track[], owner?: string) => void; randomPlay: (list: Track[], owner?: string) => void };
+const PlayerCtx = createContext<Ctx>({ current: null, playing: false, play: () => {}, toggle: () => {}, addToQueue: () => {}, updateQueue: () => {}, shuffle: false, setShuffle: () => {}, shuffleFrom: () => {}, randomPlay: () => {} });
 export const usePlayer = () => useContext(PlayerCtx);
 
 export const isYT = (t: Track) => !!t.embed_url?.includes("youtube.com/embed/");
@@ -19,6 +21,16 @@ const vidOf = (t: Track) => t.embed_url!.split("/embed/")[1].split(/[?&#]/)[0];
 // SoundCloud tracks play through SoundCloud's official Widget API (a second, hidden player). YouTube keeps its own player.
 export const isSC = (t: Track) => !!t.embed_url?.includes("w.soundcloud.com/player");
 export const isPlayable = (t: Track) => isYT(t) || isSC(t);
+
+/** A random playable song from `list`: not the one playing, and not one in `played` until every song has had a turn (then `played` starts over). */
+function pickRandom(list: Track[], current: Track | null, played: Set<string>): Track | null {
+  const playable = list.filter(isPlayable);
+  if (!playable.length) return null;
+  let cands = playable.filter((x) => x.id !== current?.id && !played.has(x.id));
+  if (!cands.length) { played.clear(); if (current) played.add(current.id); cands = playable.filter((x) => x.id !== current?.id); }
+  if (!cands.length) return playable[0]; // only one song to choose from
+  return cands[Math.floor(Math.random() * cands.length)];
+}
 
 let ytReady: Promise<any> | null = null;
 function loadYT(): Promise<any> {
@@ -113,12 +125,18 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const queue = useRef<Track[]>([]);
   const cur = useRef<Track | null>(null);
   const stepRef = useRef<(d: 1 | -1) => void>(() => {});
+  const failRef = useRef<() => void>(() => {}); // a song would not play (embedding blocked, removed...): skip it, but stop if everything is failing
+  const errRun = useRef(0);
   // "Up Next": songs the person queued. They play first, in the order added; when it empties, playback resumes in the list
   // after `anchor` (the last song that came from a list rather than from Up Next).
   const upNextRef = useRef<Track[]>([]);
   const anchor = useRef<Track | null>(null);
   const atStart = useRef(false); // true when the playing song was filtered out and the next one is the first visible track
-  const queueOwner = useRef<string | null>(null); // which on-screen list the playing queue came from
+  const queueOwner = useRef<string | null>(null);
+  const shuffleOn = useRef(false);
+  const [shuffle, setShuffleState] = useState(false);
+  const played = useRef<Set<string>>(new Set()); // songs already heard in this shuffle round
+  const hist = useRef<Track[]>([]); // shuffle history, so Previous steps back through what actually played // which on-screen list the playing queue came from
   const [upNext, setUpNext] = useState<Track[]>([]);
   const [showQueue, setShowQueue] = useState(false);
   const setQueueList = useCallback((l: Track[]) => { upNextRef.current = l; setUpNext(l); }, []);
@@ -151,11 +169,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         const c = cur.current;
         if (c && isSC(c) && c.source_url !== t.source_url) w.load(c.source_url, { ...SC_OPTS, callback: () => w.play() }); else w.play();
       });
-      w.bind(SC.Widget.Events.PLAY, () => { if (engine.current === "sc") { setPlaying(true); sync(); } });
+      w.bind(SC.Widget.Events.PLAY, () => { if (engine.current === "sc") { errRun.current = 0; setPlaying(true); sync(); } });
       w.bind(SC.Widget.Events.PAUSE, () => { if (engine.current === "sc") setPlaying(false); });
       w.bind(SC.Widget.Events.FINISH, () => { if (engine.current === "sc") stepRef.current(1); });
       w.bind(SC.Widget.Events.PLAY_PROGRESS, (e: any) => { scTime.current.pos = (e?.currentPosition ?? 0) / 1000; });
-      w.bind(SC.Widget.Events.ERROR, () => { if (engine.current === "sc") stepRef.current(1); });
+      w.bind(SC.Widget.Events.ERROR, () => { if (engine.current === "sc") failRef.current(); });
     });
   }, []);
   const [current, setCurrent] = useState<Track | null>(null);
@@ -186,10 +204,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           onStateChange: (e: any) => {
             if (engine.current !== "yt") return;
             if (e.data === 0) stepRef.current(1); // ended -> next track
-            else if (e.data === 1) setPlaying(true);
+            else if (e.data === 1) { errRun.current = 0; setPlaying(true); }
             else if (e.data === 2) setPlaying(false);
           },
-          onError: () => { if (engine.current === "yt") stepRef.current(1); }, // embedding blocked -> skip
+          onError: () => { if (engine.current === "yt") failRef.current(); }, // embedding blocked -> skip
         },
       });
     });
@@ -202,15 +220,36 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       load(n);
       return;
     }
+    if (shuffleOn.current) {
+      if (d === -1) {
+        const prev = hist.current.pop();
+        if (prev) { anchor.current = prev; atStart.current = false; load(prev); return; }
+      } else {
+        const pick = pickRandom(queue.current, cur.current, played.current);
+        if (pick) {
+          if (cur.current) hist.current = [...hist.current.slice(-49), cur.current];
+          played.current.add(pick.id); anchor.current = pick; atStart.current = false; load(pick);
+          return;
+        }
+      }
+    }
     const q = queue.current;
     const a = anchor.current ?? (atStart.current ? null : cur.current);
     if (d === -1 && a && cur.current && cur.current.id !== a.id) { load(a); return; } // "previous" from a queued song goes back to where the list was left
     const i = q.findIndex((x) => x.id === a?.id);
     const next = d === 1 ? q.slice(i + 1).find(isPlayable) : q.slice(0, Math.max(i, 0)).reverse().find(isPlayable);
-    if (next) { anchor.current = next; atStart.current = false; load(next); } else if (d === 1) setPlaying(false);
+    if (next) { anchor.current = next; atStart.current = false; load(next); return; }
+    if (d === 1) { // end of the list and nothing queued: start the list over instead of going quiet
+      const first = q.find(isPlayable);
+      if (first) { anchor.current = first; atStart.current = false; load(first); } else setPlaying(false);
+    }
+  };
+  failRef.current = () => {
+    if (++errRun.current > queue.current.length + upNextRef.current.length + 1) { errRun.current = 0; setPlaying(false); return; }
+    stepRef.current(1);
   };
 
-  const play = useCallback((t: Track, list: Track[], owner?: string) => { queue.current = list; queueOwner.current = owner ?? null; anchor.current = t; atStart.current = false; load(t); }, [load]);
+  const play = useCallback((t: Track, list: Track[], owner?: string) => { queue.current = list; queueOwner.current = owner ?? null; anchor.current = t; atStart.current = false; errRun.current = 0; played.current = new Set([t.id]); hist.current = []; load(t); }, [load]);
   // The list the person is playing from changed on screen (genre buttons, search, sort, load more): auto-play follows the visible tracks.
   // If the playing song was filtered out, playback continues with the first visible track that came after it.
   const updateQueue = useCallback((list: Track[], owner: string) => {
@@ -228,6 +267,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     anchor.current = ni > 0 ? list[ni - 1] : null; // so "next" lands on `next`
     atStart.current = ni === 0;
   }, []);
+  const setShuffle = useCallback((on: boolean) => {
+    shuffleOn.current = on; setShuffleState(on);
+    played.current = new Set(cur.current ? [cur.current.id] : []); hist.current = [];
+  }, []);
+  const randomPlay = useCallback((list: Track[], owner?: string) => {
+    const pick = pickRandom(list, cur.current, new Set());
+    if (pick) play(pick, list, owner);
+  }, [play]);
+  // The list's Shuffle button: turns shuffle on. If nothing from this list is playing yet, it also starts a random song from it.
+  const shuffleFrom = useCallback((list: Track[], owner?: string) => {
+    setShuffle(true);
+    if (!cur.current || queueOwner.current !== (owner ?? null)) {
+      const pick = pickRandom(list, null, new Set());
+      if (pick) play(pick, list, owner);
+    }
+  }, [play, setShuffle]);
   const addToQueue = useCallback((t: Track) => {
     if (!isPlayable(t)) return;
     if (!cur.current) { queue.current = [t]; queueOwner.current = null; anchor.current = t; atStart.current = false; load(t); return; } // nothing playing yet: just play it
@@ -245,7 +300,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     cur.current = null; anchor.current = null; atStart.current = false; setQueueList([]); setShowQueue(false); setCurrent(null); setPlaying(false);
   };
 
-  const ctx = useMemo(() => ({ current, playing, play, toggle, addToQueue, updateQueue }), [current, playing, play, toggle, addToQueue, updateQueue]);
+  const ctx = useMemo(() => ({ current, playing, play, toggle, addToQueue, updateQueue, shuffle, setShuffle, shuffleFrom, randomPlay }), [current, playing, play, toggle, addToQueue, updateQueue, shuffle, setShuffle, shuffleFrom, randomPlay]);
   const getPlayer = useCallback(() => (engine.current === "sc" ? (scReady.current ? scAdapter : null) : ready.current ? player.current : null), [scAdapter]);
   // Keyboard shortcuts on every page: Space = play/pause, L = like, ←/→ = back/forward 5 seconds.
   useEffect(() => {
@@ -288,6 +343,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); };
   }, [toggle, getPlayer]);
   const skip = mobile ? "flex h-10 w-10 items-center justify-center text-xl text-white/80" : "flex h-12 w-12 items-center justify-center text-2xl text-white/80 hover:text-[#c6ff00]";
+  const shuffleBtn = (
+    <button onClick={() => setShuffle(!shuffle)} aria-label={shuffle ? "Shuffle on" : "Shuffle off"} aria-pressed={shuffle} title="Shuffle"
+            className={`flex shrink-0 items-center justify-center ${shuffle ? "text-[#c6ff00]" : "text-white/60 hover:text-white"} ${mobile ? "h-10 w-9" : "h-12 w-12"}`}>
+            <ShuffleIcon className={mobile ? "h-5 w-5" : "h-6 w-6"} />
+          </button>
+  );
+  const queueBtn = (
+    <button onClick={() => setShowQueue((v) => !v)} aria-label="Up Next" aria-expanded={showQueue} title="Up Next"
+            className={`relative flex shrink-0 items-center justify-center ${showQueue || upNext.length ? "text-[#c6ff00]" : "text-white/60 hover:text-white"} ${mobile ? "h-10 w-9" : "h-12 w-12"}`}>
+            <QueueIcon className={mobile ? "h-5 w-5" : "h-6 w-6"} />
+            {upNext.length > 0 && <span className="absolute right-0 top-1 min-w-[1rem] bg-[#c6ff00] px-1 text-center text-[10px] font-bold leading-4 text-black">{upNext.length}</span>}
+          </button>
+  );
   // The player is ONE set of elements in both layouts (only classes change), so the YouTube/SoundCloud player never restarts when the layout switches.
   return (
     <PlayerCtx.Provider value={ctx}>
@@ -322,7 +390,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           </div>
         )}
         <div className="mx-auto max-w-5xl px-4">
-        <Progress key={current?.id} getPlayer={getPlayer} compact={mobile} />
+        {mobile ? <div className="flex items-center gap-1"><div className="min-w-0 flex-1"><Progress key={current?.id} getPlayer={getPlayer} compact /></div>{shuffleBtn}{queueBtn}</div> : <Progress key={current?.id} getPlayer={getPlayer} />}
         <div className={`flex items-center ${mobile ? "gap-2 pb-2 pt-1" : "gap-3 py-2 sm:gap-5"}`}>
           <div className={`relative aspect-video shrink-0 bg-black ${mobile ? "w-[72px]" : "w-28 sm:w-44"}`}><div ref={host} className="absolute inset-0" />{current && isSC(current) && <div className="absolute inset-0 bg-black">{current.artwork_url && <img src={current.artwork_url} alt="" className="h-full w-full object-cover" />}</div>}</div>
           <div className="min-w-0 flex-1">
@@ -333,11 +401,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           <button onClick={toggle} aria-label={playing ? "Pause" : "Play"}
             className={`flex shrink-0 items-center justify-center bg-[#c6ff00] text-black hover:bg-white ${mobile ? "h-11 w-11 text-xl" : "h-14 w-14 text-2xl"}`}>{playing ? "⏸" : "▶"}</button>
           <button onClick={() => stepRef.current(1)} aria-label="Next track" className={skip}>⏭</button>
-          <button onClick={() => setShowQueue((v) => !v)} aria-label="Up Next" aria-expanded={showQueue} title="Up Next"
-            className={`relative flex shrink-0 items-center justify-center ${showQueue || upNext.length ? "text-[#c6ff00]" : "text-white/60 hover:text-white"} ${mobile ? "h-10 w-9" : "h-12 w-12"}`}>
-            <QueueIcon className={mobile ? "h-5 w-5" : "h-6 w-6"} />
-            {upNext.length > 0 && <span className="absolute right-0 top-1 min-w-[1rem] bg-[#c6ff00] px-1 text-center text-[10px] font-bold leading-4 text-black">{upNext.length}</span>}
-          </button>
+          {!mobile && <>{shuffleBtn}{queueBtn}</>}
           {current && current.kind !== "mix" && <PlayerLike key={current.id} trackId={current.id} />}
           <button onClick={close} aria-label="Close player" className={`text-white/40 hover:text-white ${mobile ? "px-1 text-base" : "ml-1 px-2 text-lg"}`}>✕</button>
         </div>

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { AddSource } from "@/components/AddSource";
 import { IngestButton } from "@/components/IngestButton";
 import { useDeviceView } from "@/components/DeviceProvider";
+import { usePdfSource } from "@/lib/pdf-source";
 
 export function AuthNav() {
   const { mobile, setView } = useDeviceView();
@@ -12,6 +13,8 @@ export function AuthNav() {
   const [ready, setReady] = useState(false);
   const [admin, setAdmin] = useState(false);
   const [open, setOpen] = useState(false);
+  const pdf = usePdfSource(); // the list on the current page, if it has one
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -31,6 +34,16 @@ export function AuthNav() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  async function downloadPdf() {
+    if (!pdf || !pdf.tracks.length || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      const { downloadTrackListPdf } = await import("@/lib/pdf"); // loaded only when needed
+      downloadTrackListPdf(pdf.title, pdf.tracks);
+      setOpen(false);
+    } finally { setPdfBusy(false); }
+  }
 
   const signOut = async () => { await createClient().auth.signOut(); window.location.href = "/"; };
 
@@ -63,6 +76,13 @@ export function AuthNav() {
         {open && (
           <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-64 border border-white/20 bg-black p-4 text-white shadow-xl">
             <div className="truncate text-xs text-white/50">{email}</div>
+            {pdf && (
+              <button role="menuitem" onClick={downloadPdf} disabled={pdfBusy || !pdf.tracks.length}
+                className="mt-3 w-full border border-white/20 px-3 py-2 text-left text-xs uppercase tracking-widest text-white/70 hover:border-[#c6ff00] hover:text-[#c6ff00] disabled:opacity-40">
+                {pdfBusy ? "Preparing…" : "Download PDF"}
+                <span className="mt-0.5 block text-[10px] normal-case tracking-normal text-white/40">{pdf.title} · {pdf.tracks.length} track{pdf.tracks.length === 1 ? "" : "s"}</span>
+              </button>
+            )}
             <button role="menuitem" onClick={signOut} className="mt-3 w-full border border-white/20 py-2 text-xs uppercase tracking-widest text-white/70 hover:border-white/50 hover:text-white">Sign out</button>
           </div>
         )}

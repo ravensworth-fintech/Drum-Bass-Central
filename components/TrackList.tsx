@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { LikeButton } from "./LikeButton";
-import { DownloadPdfButton } from "./DownloadPdfButton";
+import { usePublishPdf } from "@/lib/pdf-source";
 import { isPlayable, usePlayer } from "./PlayerProvider";
 import { useIsMobile } from "./DeviceProvider";
 import { QueueIcon } from "./QueueIcon";
+import { PlayActions } from "./PlayActions";
 
 export type Track = {
   id: string; title: string; artist_name: string; subgenre: string;
@@ -125,6 +126,8 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
 
 export function TrackList({ tracks, title, showGenre, tintHouse, owner, dividers = true }: { tracks: Track[]; title: string; showGenre?: boolean; tintHouse?: boolean; owner?: string; dividers?: boolean }) {
   const mobile = useIsMobile();
+  const pdfTracks = useMemo(() => tracks.map((t) => ({ artist: t.artist_name, title: t.title })), [tracks]);
+  usePublishPdf(title, pdfTracks); // the Account menu's "Download PDF" exports what this list shows
   const [liked, setLiked] = useState<Set<string>>(new Set());
   useEffect(() => {
     const s = createClient();
@@ -140,9 +143,7 @@ export function TrackList({ tracks, title, showGenre, tintHouse, owner, dividers
 
   return (
     <div>
-      <div className="mb-3 flex justify-end">
-        <DownloadPdfButton title={title} tracks={tracks.map((t) => ({ artist: t.artist_name, title: t.title }))} />
-      </div>
+      <PlayActions tracks={tracks} owner={owner} />
       <ul className="divide-y divide-white/10">
         {tracks.flatMap((t, i) => {
           const day = dayKey(t.released_on);

@@ -2,12 +2,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { DayDivider, Track, TrackRow, dayKey } from "@/components/TrackList";
-import { DownloadPdfButton } from "@/components/DownloadPdfButton";
+import { usePublishPdf } from "@/lib/pdf-source";
 import { Genre, GenreToggle } from "@/components/GenreToggle";
 import { useIsMobile } from "@/components/DeviceProvider";
 import { usePlayer } from "@/components/PlayerProvider";
 import { CollapsibleSearch } from "@/components/CollapsibleSearch";
 import { MobileFilters } from "@/components/MobileFilters";
+import { PlayActions } from "@/components/PlayActions";
 
 type Row = { liked_at: string; tracks: Track };
 type SortKey = "liked" | "posted" | "artist" | "title";
@@ -91,6 +92,8 @@ export default function LikedClient() {
   // What is shown is what auto-play follows: filter, search or sort and the next track changes with it.
   const shownTracks = useMemo(() => shown.map((r) => r.tracks), [shown]);
   useEffect(() => { updateQueue(shownTracks, "liked"); }, [shownTracks, updateQueue]);
+  const pdfTracks = useMemo(() => shownTracks.map((t) => ({ artist: t.artist_name, title: t.title })), [shownTracks]);
+  usePublishPdf("Likes", pdfTracks); // the Account menu's "Download PDF" exports this list
 
   function pickGenre(g: Genre) {
     setGenre(g);
@@ -121,7 +124,6 @@ export default function LikedClient() {
   const btn = `border border-white/20 px-3 text-xs uppercase tracking-widest hover:border-white/50 ${m ? "py-2.5" : "py-1.5"}`;
   const field = `border border-white/20 px-3 text-sm ${m ? "w-full py-2.5" : "py-1.5"}`;
   const dirLabel = sortKey === "artist" || sortKey === "title" ? (asc ? "A → Z" : "Z → A") : (asc ? "Oldest first" : "Newest first");
-  const pdf = <DownloadPdfButton title="Likes" tracks={shown.map((r) => ({ artist: r.tracks.artist_name, title: r.tracks.title }))} />;
   const showBoxes = !m || selectMode;
   return (
     <>
@@ -172,14 +174,12 @@ export default function LikedClient() {
           <button onClick={() => setSel(new Set(shown.map((r) => r.tracks.id)))} disabled={!shown.length} className={btn}>Select all shown</button>
           <button onClick={() => setSel(new Set())} disabled={!sel.size} className={btn}>Clear selection</button>
           {copied && <span className={`text-sm text-[#c6ff00] ${m ? "col-span-2" : ""}`}>{copied}</span>}
-          {!m && <div className="ml-auto">{pdf}</div>}
         </div>
-      ) : (
-        <div className="mb-3 flex justify-end">{pdf}</div>
-      )}
+      ) : null}
 
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {rows && !shown.length && <p className="text-white/50">{rows.length ? "No likes match." : "Nothing here yet."}</p>}
+      {shown.length > 0 && <PlayActions tracks={shownTracks} owner="liked" />}
       <ul className="divide-y divide-white/10">
         {shown.flatMap((r, i) => {
           const on = sel.has(r.tracks.id);
