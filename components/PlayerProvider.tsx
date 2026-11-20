@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Track } from "./TrackList";
 import { LikeButton } from "./LikeButton";
 import { createClient } from "@/lib/supabase-browser";
+import { toggleLikeById } from "@/lib/likes";
 import { useIsMobile } from "./DeviceProvider";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -206,6 +207,46 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const ctx = useMemo(() => ({ current, playing, play, toggle }), [current, playing, play, toggle]);
   const getPlayer = useCallback(() => (engine.current === "sc" ? (scReady.current ? scAdapter : null) : ready.current ? player.current : null), [scAdapter]);
+  // Keyboard shortcuts on every page: Space = play/pause, L = like, ←/→ = back/forward 5 seconds.
+  useEffect(() => {
+    const SEEK = 5;
+    const isTyping = (el: EventTarget | null) => {
+      const e = el as HTMLElement | null;
+      if (!e) return false;
+      if (e.isContentEditable) return true;
+      const tag = e.tagName;
+      if (tag === "TEXTAREA" || tag === "SELECT") return true;
+      if (tag === "INPUT") return !["range", "button", "submit", "reset"].includes((e as HTMLInputElement).type);
+      return false;
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
+      const t = cur.current;
+      if (!t) return; // nothing loaded: leave keys alone (space still scrolls the page)
+      if (e.code === "Space") {
+        e.preventDefault(); // also stops a focused button from being "clicked" by the space bar
+        if (!e.repeat) toggle();
+      } else if (e.key === "l" || e.key === "L") {
+        if (e.repeat || t.kind === "mix") return; // mixes can't be liked
+        toggleLikeById(t.id);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        if ((e.target as HTMLElement)?.tagName === "INPUT") return; // let the seek slider handle its own arrows
+        const p = getPlayer();
+        if (!p) return;
+        e.preventDefault();
+        const dur = p.getDuration?.() || 0;
+        const to = (p.getCurrentTime?.() || 0) + (e.key === "ArrowRight" ? SEEK : -SEEK);
+        p.seekTo(dur ? Math.min(Math.max(0, to), Math.max(0, dur - 1)) : Math.max(0, to), true);
+      }
+    };
+    // Firefox fires the button click on space *keyup*, so block that too while a track is loaded.
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space" && cur.current && !isTyping(e.target) && !e.ctrlKey && !e.metaKey && !e.altKey) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); };
+  }, [toggle, getPlayer]);
   const skip = mobile ? "flex h-10 w-10 items-center justify-center text-xl text-white/80" : "flex h-12 w-12 items-center justify-center text-2xl text-white/80 hover:text-[#c6ff00]";
   // The player is ONE set of elements in both layouts (only classes change), so the YouTube/SoundCloud player never restarts when the layout switches.
   return (
