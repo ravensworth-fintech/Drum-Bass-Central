@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { LikeButton } from "./LikeButton";
 import { DownloadPdfButton } from "./DownloadPdfButton";
 import { isPlayable, usePlayer } from "./PlayerProvider";
+import { useIsMobile } from "./DeviceProvider";
 
 export type Track = {
   id: string; title: string; artist_name: string; subgenre: string;
@@ -56,10 +57,31 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
   t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode; queue: Track[]; below?: React.ReactNode; noSC?: boolean; showGenre?: boolean; tintHouse?: boolean;
 }) {
   const { current, playing, play, toggle } = usePlayer();
+  const mobile = useIsMobile();
   const isCur = current?.id === t.id;
   const li = useRef<HTMLLIElement>(null);
   useEffect(() => { if (isCur) li.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [isCur]);
   const meta = [showGenre ? genreLabel(t.genre) : null, fmtDur(t.duration_seconds), t.subgenre !== "Unknown" ? t.subgenre : null, t.source_name, fmtDate(t.released_on), extra].filter(Boolean).join(" · ");
+  // Mobile row: big play/artwork target on the left, title / artist / details stacked, one action (the heart) on the right. No tiny link chips.
+  if (mobile) return (
+    <li ref={li} className={`py-2.5 ${isCur ? "bg-white/5" : tintHouse && t.genre === "house" ? "bg-indigo-300/[0.07]" : ""}`}>
+      <div className="flex items-center gap-3">
+        {leading}
+        <button onClick={() => (isCur ? toggle() : play(t, queue))} disabled={!isPlayable(t)} aria-label={isCur && playing ? "Pause" : "Play"}
+          className="relative h-14 w-14 shrink-0 overflow-hidden bg-white/10">
+          {t.artwork_url && <img src={t.artwork_url} alt="" loading="lazy" className="h-full w-full object-cover" />}
+          {isPlayable(t) && <span className={`absolute inset-0 flex items-center justify-center text-base ${isCur ? "bg-black/60 text-[#c6ff00]" : "bg-black/40"}`}>{isCur && playing ? "❚❚" : "▶"}</span>}
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className={`truncate text-[15px] font-semibold ${isCur ? "text-[#c6ff00]" : ""}`}>{t.title}</div>
+          <div className="truncate text-sm text-white/60">{t.artist_name}</div>
+          <div className="truncate text-xs text-white/40">{meta}</div>
+        </div>
+        {action}
+      </div>
+      {below}
+    </li>
+  );
   return (
     <li ref={li} className={`py-2 ${isCur ? "bg-white/5" : tintHouse && t.genre === "house" ? "bg-indigo-300/[0.07]" : ""}`}>
       <div className="flex items-center gap-3">
@@ -86,6 +108,7 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
 }
 
 export function TrackList({ tracks, title, showGenre, tintHouse }: { tracks: Track[]; title: string; showGenre?: boolean; tintHouse?: boolean }) {
+  const mobile = useIsMobile();
   const [liked, setLiked] = useState<Set<string>>(new Set());
   useEffect(() => {
     const s = createClient();
@@ -111,7 +134,7 @@ export function TrackList({ tracks, title, showGenre, tintHouse }: { tracks: Tra
           if (day && day !== (i ? dayKey(tracks[i - 1].released_on) : null)) rows.push(<DayDivider key={`day-${day}-${i}`} day={day} />);
           rows.push(
             <TrackRow key={t.id} t={t} queue={tracks} showGenre={showGenre} tintHouse={tintHouse}
-              action={<LikeButton key={t.id + liked.has(t.id)} trackId={t.id} initiallyLiked={liked.has(t.id)} />} />
+              action={<LikeButton key={t.id + liked.has(t.id)} trackId={t.id} initiallyLiked={liked.has(t.id)} className={mobile ? "flex h-11 w-11 items-center justify-center text-2xl" : ""} />} />
           );
           return rows;
         })}

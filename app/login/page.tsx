@@ -60,7 +60,7 @@ export default function Login() {
   return (
     <div className="max-w-sm">
       <h1 className="mb-4 text-2xl font-black uppercase">Sign in</h1>
-      <div className="mb-4 flex gap-2">{tab("signin", "Password")}{tab("signup", "Create account")}{tab("code", "Email link")}</div>
+      <div className="mb-4 flex flex-wrap gap-2">{tab("signin", "Password")}{tab("signup", "Create account")}{tab("code", "Email link")}</div>
       <form onSubmit={submit}>
         <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" autoComplete="email" className={input} />
         {mode !== "code" && (

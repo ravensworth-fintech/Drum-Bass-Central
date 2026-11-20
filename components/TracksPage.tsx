@@ -21,7 +21,7 @@ export async function TracksPage({ genre, heading }: { genre?: "dnb" | "house" |
   } catch (e) { error = String(e); }
   return (
     <>
-      <h1 className="mb-6 text-3xl font-black uppercase">{heading}</h1>
+      <h1 className="mb-4 text-2xl font-black uppercase sm:mb-6 sm:text-3xl">{heading}</h1>
       {error && <p className="mb-4 text-red-400">Database error: {error}</p>}
       <TracksBrowser initial={initial} channels={channels} genre={genre} label={heading} />
     </>

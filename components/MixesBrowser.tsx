@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { DayDivider, Track, TrackRow, dayKey } from "@/components/TrackList";
 import { Mix, MixTracklist } from "@/components/MixTracklist";
 import { Genre, GenreToggle } from "@/components/GenreToggle";
+import { useIsMobile } from "@/components/DeviceProvider";
 
 const PAGE = 30;
 
@@ -15,6 +16,7 @@ const toTrack = (m: Mix): Track => ({
 
 
 export function MixesBrowser({ initial, channels }: { initial: Mix[]; channels: { name: string; genre: string }[] }) {
+  const m = useIsMobile();
   const [mixes, setMixes] = useState<Mix[]>(initial.slice(0, PAGE));
   const [hasMore, setHasMore] = useState(initial.length > PAGE);
   const [q, setQ] = useState("");
@@ -75,14 +77,14 @@ export function MixesBrowser({ initial, channels }: { initial: Mix[]; channels: 
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className={m ? "mb-3 grid grid-cols-1 gap-2" : "mb-4 flex flex-wrap items-center gap-3"}>
         <GenreToggle value={genre} onChange={pickGenre} />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search mixes, DJs or shows" className="border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
-        <select value={channel} onChange={(e) => setChannel(e.target.value)} className="border border-white/20 bg-black px-3 py-1.5 text-sm">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search mixes, DJs or shows" className={`border border-white/20 bg-transparent px-3 text-sm ${m ? "w-full py-2.5" : "py-1.5"}`} />
+        <select value={channel} onChange={(e) => setChannel(e.target.value)} className={`border border-white/20 bg-black px-3 text-sm ${m ? "w-full py-2.5" : "py-1.5"}`}>
           <option value="">All channels</option>
           {channelNames.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <label className="flex items-center gap-2 text-sm text-white/70">
+        <label className={`flex items-center gap-2 text-white/70 ${m ? "py-1 text-base" : "text-sm"}`}>
           <input type="checkbox" checked={onlyTl} onChange={(e) => setOnlyTl(e.target.checked)} className="accent-[#c6ff00]" /> Only with tracklist
         </label>
         {loading && <span className="text-xs text-white/50">Loading…</span>}

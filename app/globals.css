@@ -2,3 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 body { background: #0b0b0c; color: #fff; font-family: ui-sans-serif, system-ui, sans-serif; }
+
+/* Phones: 16px inputs stop iOS Safari from zooming the page when a field is focused; no grey tap flash. */
+@media (max-width: 1023px) {
+  input, select, textarea { font-size: 16px !important; }
+  a, button { -webkit-tap-highlight-color: transparent; }
+}
+html { -webkit-text-size-adjust: 100%; }

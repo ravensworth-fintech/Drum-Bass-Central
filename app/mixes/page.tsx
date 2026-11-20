@@ -22,7 +22,7 @@ export default async function Mixes() {
   } catch (e) { error = String(e); }
   return (
     <>
-      <h1 className="mb-6 text-3xl font-black uppercase">Mixes</h1>
+      <h1 className="mb-4 text-2xl font-black uppercase sm:mb-6 sm:text-3xl">Mixes</h1>
       {error && <p className="mb-4 text-red-400">Database error: {error}</p>}
       <MixesBrowser initial={initial} channels={channels} />
     </>

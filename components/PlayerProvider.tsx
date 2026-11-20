@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Track } from "./TrackList";
 import { LikeButton } from "./LikeButton";
 import { createClient } from "@/lib/supabase-browser";
+import { useIsMobile } from "./DeviceProvider";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // ONE persistent YouTube player (official IFrame API) that lives in the layout. Because the same player keeps
@@ -53,7 +54,7 @@ const fmt = (n: number) => {
 };
 
 /** Seek bar outside the YouTube player. Reads position from the official player and seeks with seekTo(). */
-function Progress({ getPlayer }: { getPlayer: () => any }) {
+function Progress({ getPlayer, compact }: { getPlayer: () => any; compact?: boolean }) {
   const [time, setTime] = useState(0);
   const [dur, setDur] = useState(0);
   const [drag, setDrag] = useState<number | null>(null);
@@ -74,12 +75,12 @@ function Progress({ getPlayer }: { getPlayer: () => any }) {
   };
   const shown = drag ?? time;
   return (
-    <div className="flex items-center gap-3 pt-2 text-xs tabular-nums text-white/60">
-      <span className="w-10 text-right">{fmt(shown)}</span>
+    <div className={`flex items-center gap-3 text-xs tabular-nums text-white/60 ${compact ? "pt-1" : "pt-2"}`}>
+      {!compact && <span className="w-10 text-right">{fmt(shown)}</span>}
       <input type="range" min={0} max={dur || 1} step={1} value={Math.min(shown, dur || 1)} disabled={!dur} aria-label="Seek"
-        onChange={(e) => setDrag(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} onBlur={commit}
+        onChange={(e) => setDrag(Number(e.target.value))} onPointerUp={commit} onTouchEnd={commit} onKeyUp={commit} onBlur={commit}
         className="h-6 flex-1 cursor-pointer accent-[#c6ff00] disabled:cursor-default" />
-      <span className="w-10">{fmt(dur)}</span>
+      {!compact && <span className="w-10">{fmt(dur)}</span>}
     </div>
   );
 }
@@ -103,6 +104,7 @@ function PlayerLike({ trackId }: { trackId: string }) {
 }
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
+  const mobile = useIsMobile();
   const host = useRef<HTMLDivElement>(null);
   const player = useRef<any>(null);
   const ready = useRef(false);
@@ -204,27 +206,28 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const ctx = useMemo(() => ({ current, playing, play, toggle }), [current, playing, play, toggle]);
   const getPlayer = useCallback(() => (engine.current === "sc" ? (scReady.current ? scAdapter : null) : ready.current ? player.current : null), [scAdapter]);
-  const skip = "flex h-12 w-12 items-center justify-center text-2xl text-white/80 hover:text-[#c6ff00]";
+  const skip = mobile ? "flex h-10 w-10 items-center justify-center text-xl text-white/80" : "flex h-12 w-12 items-center justify-center text-2xl text-white/80 hover:text-[#c6ff00]";
+  // The player is ONE set of elements in both layouts (only classes change), so the YouTube/SoundCloud player never restarts when the layout switches.
   return (
     <PlayerCtx.Provider value={ctx}>
       {children}
       <div ref={scHost} aria-hidden className="pointer-events-none fixed bottom-0 left-0 h-px w-px overflow-hidden opacity-0" /> {/* hidden SoundCloud player */}
-      {current && <div className="h-36" />} {/* keeps the last rows clear of the bar */}
-      <div className={`fixed inset-x-0 bottom-0 z-50 border-t border-white/15 bg-black/95 backdrop-blur ${current ? "" : "hidden"}`}>
+      {current && <div className={mobile ? "h-24" : "h-36"} />} {/* keeps the last rows clear of the bar */}
+      <div className={`fixed inset-x-0 z-50 border-t border-white/15 ${mobile ? "bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-black" : "bottom-0 bg-black/95 backdrop-blur"} ${current ? "" : "hidden"}`}>
         <div className="mx-auto max-w-5xl px-4">
-        <Progress key={current?.id} getPlayer={getPlayer} />
-        <div className="flex items-center gap-3 py-2 sm:gap-5">
-          <div className="relative aspect-video w-28 shrink-0 bg-black sm:w-44"><div ref={host} className="absolute inset-0" />{current && isSC(current) && <div className="absolute inset-0 bg-black">{current.artwork_url && <img src={current.artwork_url} alt="" className="h-full w-full object-cover" />}</div>}</div>
+        <Progress key={current?.id} getPlayer={getPlayer} compact={mobile} />
+        <div className={`flex items-center ${mobile ? "gap-2 pb-2 pt-1" : "gap-3 py-2 sm:gap-5"}`}>
+          <div className={`relative aspect-video shrink-0 bg-black ${mobile ? "w-[72px]" : "w-28 sm:w-44"}`}><div ref={host} className="absolute inset-0" />{current && isSC(current) && <div className="absolute inset-0 bg-black">{current.artwork_url && <img src={current.artwork_url} alt="" className="h-full w-full object-cover" />}</div>}</div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold sm:text-base">{current?.title}</div>
-            <div className="truncate text-xs text-white/60 sm:text-sm">{current?.artist_name}</div>
+            <div className={`truncate font-semibold ${mobile ? "text-sm" : "text-sm sm:text-base"}`}>{current?.title}</div>
+            <div className={`truncate text-white/60 ${mobile ? "text-xs" : "text-xs sm:text-sm"}`}>{current?.artist_name}</div>
           </div>
-          <button onClick={() => stepRef.current(-1)} aria-label="Previous track" className={skip}>⏮</button>
+          {!mobile && <button onClick={() => stepRef.current(-1)} aria-label="Previous track" className={skip}>⏮</button>}
           <button onClick={toggle} aria-label={playing ? "Pause" : "Play"}
-            className="flex h-14 w-14 shrink-0 items-center justify-center bg-[#c6ff00] text-2xl text-black hover:bg-white">{playing ? "⏸" : "▶"}</button>
+            className={`flex shrink-0 items-center justify-center bg-[#c6ff00] text-black hover:bg-white ${mobile ? "h-11 w-11 text-xl" : "h-14 w-14 text-2xl"}`}>{playing ? "⏸" : "▶"}</button>
           <button onClick={() => stepRef.current(1)} aria-label="Next track" className={skip}>⏭</button>
           {current && current.kind !== "mix" && <PlayerLike key={current.id} trackId={current.id} />}
-          <button onClick={close} aria-label="Close player" className="ml-1 px-2 text-lg text-white/40 hover:text-white">✕</button>
+          <button onClick={close} aria-label="Close player" className={`text-white/40 hover:text-white ${mobile ? "px-1 text-base" : "ml-1 px-2 text-lg"}`}>✕</button>
         </div>
         </div>
       </div>

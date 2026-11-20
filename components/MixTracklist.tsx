@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { fmtDur, scSearchUrl } from "./TrackList";
+import { useIsMobile } from "./DeviceProvider";
 
 export type Mix = {
   id: string; title: string; dj_name: string | null; show_or_channel: string | null; uploaded_at: string | null; duration_seconds: number | null;
@@ -15,6 +16,7 @@ const link = "text-white/60 underline hover:text-[#c6ff00]";
 
 /** The "Tracklist" dropdown under each mix. Entries load from the database the first time it is opened. */
 export function MixTracklist({ mix }: { mix: Mix }) {
+  const mobile = useIsMobile();
   const has = mix.tracklist_status === "matched";
   const [entries, setEntries] = useState<Entry[] | null>(null);
   const [err, setErr] = useState("");
@@ -35,8 +37,8 @@ export function MixTracklist({ mix }: { mix: Mix }) {
 
   const query = `${mix.dj_name ?? mix.show_or_channel ?? ""} ${mix.title}`.trim();
   return (
-    <details onToggle={onToggle} className="pb-2 pl-14 text-sm">
-      <summary className="cursor-pointer select-none text-xs uppercase tracking-widest text-white/50 hover:text-[#c6ff00]">
+    <details onToggle={onToggle} className={`pb-2 text-sm ${mobile ? "pt-1" : "pl-14"}`}>
+      <summary className={`cursor-pointer select-none text-xs uppercase tracking-widest text-white/50 hover:text-[#c6ff00] ${mobile ? "py-2" : ""}`}>
         {has ? "Tracklist" : "Tracklist not found yet"}
       </summary>
       {has ? (
@@ -47,7 +49,7 @@ export function MixTracklist({ mix }: { mix: Mix }) {
               <ol className="space-y-1">
                 {entries.map((x) => (
                   <li key={x.position} className="flex gap-3">
-                    <span className="w-14 shrink-0 text-right text-xs tabular-nums text-white/40">{fmtDur(x.timestamp_seconds) ?? x.position}</span>
+                    <span className={`shrink-0 text-right text-xs tabular-nums text-white/40 ${mobile ? "w-12" : "w-14"}`}>{fmtDur(x.timestamp_seconds) ?? x.position}</span>
                     <span className="min-w-0 flex-1">
                       <span className="font-semibold">{x.title}</span><span className="text-white/60"> – {x.artist_name}</span>
                       {x.label_name && <span className="text-white/40"> [{x.label_name}]</span>}

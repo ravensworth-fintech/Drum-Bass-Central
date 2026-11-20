@@ -2,11 +2,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { TrackList, Track, scSearchUrl } from "@/components/TrackList";
+import { useIsMobile } from "@/components/DeviceProvider";
 
 const PAGE = 30;
 
 /** genre shows one genre; leave it out for Discover, which shows D&B and House together (Bands stays on its own tab). */
 export function TracksBrowser({ initial, channels, genre, label }: { initial: Track[]; channels: string[]; genre?: "dnb" | "house" | "bands"; label: string }) {
+  const m = useIsMobile();
   const [tracks, setTracks] = useState<Track[]>(initial.slice(0, PAGE));
   const [hasMore, setHasMore] = useState(initial.length > PAGE);
   const [q, setQ] = useState("");
@@ -63,17 +65,17 @@ export function TracksBrowser({ initial, channels, genre, label }: { initial: Tr
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className={m ? "mb-3 grid grid-cols-1 gap-2" : "mb-4 flex flex-wrap items-center gap-3"}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search artist or title"
-          className="border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
+          className={`border border-white/20 bg-transparent px-3 text-sm ${m ? "w-full py-2.5" : "py-1.5"}`} />
         <select value={channel} onChange={(e) => setChannel(e.target.value)}
-          className="border border-white/20 bg-black px-3 py-1.5 text-sm">
+          className={`border border-white/20 bg-black px-3 text-sm ${m ? "w-full py-2.5" : "py-1.5"}`}>
           <option value="">All channels</option>
           {channels.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         {q.trim() && (
           <a href={scSearchUrl(q.trim())} target="_blank" rel="noreferrer"
-            className="border border-white/20 px-3 py-1.5 text-xs uppercase tracking-widest hover:border-[#c6ff00] hover:text-[#c6ff00]">Search SoundCloud ↗</a>
+            className={`border border-white/20 px-3 text-xs uppercase tracking-widest hover:border-[#c6ff00] hover:text-[#c6ff00] ${m ? "py-2.5 text-center" : "py-1.5"}`}>Search SoundCloud ↗</a>
         )}
         {loading && <span className="text-xs text-white/50">Loading…</span>}
       </div>

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { DayDivider, Track, TrackRow, dayKey } from "@/components/TrackList";
 import { DownloadPdfButton } from "@/components/DownloadPdfButton";
 import { Genre, GenreToggle } from "@/components/GenreToggle";
+import { useIsMobile } from "@/components/DeviceProvider";
 
 type Row = { liked_at: string; tracks: Track };
 type SortKey = "liked" | "posted" | "artist" | "title";
@@ -16,6 +17,8 @@ const SORTS: { key: SortKey; label: string }[] = [
 ];
 
 export default function LikedClient() {
+  const m = useIsMobile();
+  const [selectMode, setSelectMode] = useState(false); // phones: checkboxes + copy/select buttons only appear in Select mode
   const [rows, setRows] = useState<Row[] | null>(null);
   const [authed, setAuthed] = useState(true);
   const [err, setErr] = useState("");
@@ -106,38 +109,59 @@ export default function LikedClient() {
   }
 
   if (!authed) return <p>Please <a className="text-[#c6ff00] underline" href="/login">sign in</a> to see your likes.</p>;
-  const btn = "border border-white/20 px-3 py-1.5 text-xs uppercase tracking-widest hover:border-white/50";
+  const btn = `border border-white/20 px-3 text-xs uppercase tracking-widest hover:border-white/50 ${m ? "py-2.5" : "py-1.5"}`;
+  const field = `border border-white/20 px-3 text-sm ${m ? "w-full py-2.5" : "py-1.5"}`;
+  const dirLabel = sortKey === "artist" || sortKey === "title" ? (asc ? "A → Z" : "Z → A") : (asc ? "Oldest first" : "Newest first");
+  const pdf = <DownloadPdfButton title="Likes" tracks={shown.map((r) => ({ artist: r.tracks.artist_name, title: r.tracks.title }))} />;
+  const showBoxes = !m || selectMode;
   return (
     <>
-      <h1 className="mb-6 text-3xl font-black uppercase">Likes</h1>
+      <h1 className="mb-4 text-2xl font-black uppercase sm:mb-6 sm:text-3xl">Likes</h1>
 
-      <div className="mb-3 flex flex-wrap items-center gap-3">
-        <GenreToggle value={genre} onChange={pickGenre} withBands />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search likes" className="border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
-        <select value={channel} onChange={(e) => setChannel(e.target.value)} className="border border-white/20 bg-black px-3 py-1.5 text-sm">
-          <option value="">All channels</option>
-          {channels.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={sortKey} onChange={(e) => changeSort(e.target.value as SortKey)} className="border border-white/20 bg-black px-3 py-1.5 text-sm" aria-label="Sort by">
-          {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
-        </select>
-        <button onClick={() => setAsc(!asc)} className={btn}>
-          {sortKey === "artist" || sortKey === "title" ? (asc ? "A → Z" : "Z → A") : (asc ? "Oldest first" : "Newest first")}
-        </button>
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <button onClick={copyLinks} disabled={!selectedShown.length}
-          className="bg-[#c6ff00] px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-black disabled:opacity-30">
-          Copy Links{selectedShown.length ? ` (${selectedShown.length})` : ""}
-        </button>
-        <button onClick={() => setSel(new Set(shown.map((r) => r.tracks.id)))} disabled={!shown.length} className={btn}>Select all shown</button>
-        <button onClick={() => setSel(new Set())} disabled={!sel.size} className={btn}>Clear selection</button>
-        {copied && <span className="text-sm text-[#c6ff00]">{copied}</span>}
-        <div className="ml-auto">
-          <DownloadPdfButton title="Likes" tracks={shown.map((r) => ({ artist: r.tracks.artist_name, title: r.tracks.title }))} />
+      {m ? (
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <div className="col-span-2"><GenreToggle value={genre} onChange={pickGenre} withBands /></div>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search likes" className={`col-span-2 bg-transparent ${field}`} />
+          <select value={channel} onChange={(e) => setChannel(e.target.value)} className={`bg-black ${field}`} aria-label="Channel">
+            <option value="">All channels</option>
+            {channels.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={sortKey} onChange={(e) => changeSort(e.target.value as SortKey)} className={`bg-black ${field}`} aria-label="Sort by">
+            {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
+          </select>
+          <button onClick={() => setAsc(!asc)} className={btn}>{dirLabel}</button>
+          <button onClick={() => { if (selectMode) setSel(new Set()); setSelectMode(!selectMode); }} aria-pressed={selectMode}
+            className={`${btn} ${selectMode ? "border-[#c6ff00] text-[#c6ff00]" : ""}`}>{selectMode ? "Done" : "Select"}</button>
         </div>
-      </div>
+      ) : (
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <GenreToggle value={genre} onChange={pickGenre} withBands />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search likes" className={`bg-transparent ${field}`} />
+          <select value={channel} onChange={(e) => setChannel(e.target.value)} className={`bg-black ${field}`}>
+            <option value="">All channels</option>
+            {channels.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={sortKey} onChange={(e) => changeSort(e.target.value as SortKey)} className={`bg-black ${field}`} aria-label="Sort by">
+            {SORTS.map((s) => <option key={s.key} value={s.key}>Sort: {s.label}</option>)}
+          </select>
+          <button onClick={() => setAsc(!asc)} className={btn}>{dirLabel}</button>
+        </div>
+      )}
+
+      {showBoxes ? (
+        <div className={m ? "mb-3 grid grid-cols-2 gap-2" : "mb-4 flex flex-wrap items-center gap-3"}>
+          <button onClick={copyLinks} disabled={!selectedShown.length}
+            className={`bg-[#c6ff00] px-4 text-xs font-bold uppercase tracking-widest text-black disabled:opacity-30 ${m ? "col-span-2 py-3" : "py-1.5"}`}>
+            Copy Links{selectedShown.length ? ` (${selectedShown.length})` : ""}
+          </button>
+          <button onClick={() => setSel(new Set(shown.map((r) => r.tracks.id)))} disabled={!shown.length} className={btn}>Select all shown</button>
+          <button onClick={() => setSel(new Set())} disabled={!sel.size} className={btn}>Clear selection</button>
+          {copied && <span className={`text-sm text-[#c6ff00] ${m ? "col-span-2" : ""}`}>{copied}</span>}
+          {!m && <div className="ml-auto">{pdf}</div>}
+        </div>
+      ) : (
+        <div className="mb-3 flex justify-end">{pdf}</div>
+      )}
 
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {rows && !shown.length && <p className="text-white/50">{rows.length ? "No likes match." : "Nothing here yet."}</p>}
@@ -150,13 +174,13 @@ export default function LikedClient() {
           const divider = day && day !== (i ? dayOf(shown[i - 1]) : null) ? [<DayDivider key={`day-${day}-${i}`} day={day} />] : [];
           return [...divider,
             <TrackRow key={r.tracks.id} t={r.tracks} showGenre={!genre} queue={shown.map((x) => x.tracks)} extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
-              leading={
+              leading={showBoxes ? (
                 <button onClick={() => toggle(r.tracks.id)} aria-pressed={on} aria-label={on ? "Deselect track" : "Select track"}
-                  className={`h-6 w-6 shrink-0 border text-sm font-bold leading-none ${on ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/30"}`}>
+                  className={`shrink-0 border text-sm font-bold leading-none ${m ? "h-8 w-8" : "h-6 w-6"} ${on ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/30"}`}>
                   {on ? "✓" : ""}
                 </button>
-              }
-              action={<button onClick={() => unlike(r.tracks.id)} className="text-[#c6ff00]" aria-label="Unlike">♥</button>} />];
+              ) : undefined}
+              action={<button onClick={() => unlike(r.tracks.id)} className={`text-[#c6ff00] ${m ? "flex h-11 w-11 items-center justify-center text-2xl" : ""}`} aria-label="Unlike">♥</button>} />];
         })}
       </ul>
     </>
