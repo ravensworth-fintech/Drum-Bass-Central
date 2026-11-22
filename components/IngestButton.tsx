@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { useIsMobile } from "@/components/DeviceProvider";
 
 /** "INGEST" (admins only): scans every enabled channel for new tracks and mixes, then reloads the page. */
-export function IngestButton() {
+export function IngestButton({ align = "right" }: { align?: "left" | "right" }) {
   const mobile = useIsMobile();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
@@ -47,7 +47,7 @@ export function IngestButton() {
       <button onClick={run} disabled={busy} className="border border-[#c6ff00] px-3 py-1 text-xs font-bold uppercase tracking-widest text-[#c6ff00] hover:bg-[#c6ff00] hover:text-black disabled:opacity-50">
         {busy ? "Scanning…" : "INGEST"}
       </button>
-      {msg && <p className={`z-[60] border border-white/20 bg-black p-3 text-xs ${mobile ? "fixed inset-x-3 top-20" : "absolute right-0 z-20 mt-2 w-72"} ${msg.bad ? "text-red-400" : "text-[#c6ff00]"}`}>{msg.text}</p>}
+      {msg && <p className={`z-[60] border border-white/20 bg-black p-3 text-xs ${mobile ? "fixed inset-x-3 top-20" : `absolute ${align === "left" ? "left-0" : "right-0"} z-20 mt-2 w-72`} ${msg.bad ? "text-red-400" : "text-[#c6ff00]"}`}>{msg.text}</p>}
     </div>
   );
 }

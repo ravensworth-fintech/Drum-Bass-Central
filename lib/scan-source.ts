@@ -56,18 +56,31 @@ export async function scanSource(sb: ReturnType<typeof admin>, src: Source) {
       await sb.from("tracks").update({ source_name: src.name }).eq("platform", "youtube").in("platform_id", entries.map((e) => e.videoId)).is("source_name", null);
     }
 
+    // Videos already saved as a track or mix need no further work (the dedupe below would drop them anyway). Leaving them out
+    // also saves YouTube API quota, which matters now that every channel is scanned every 2 hours.
+    const known = new Set<string>();
+    {
+      const ids = entries.map((e) => e.videoId);
+      const [kt, km] = await Promise.all([
+        sb.from("tracks").select("platform_id").eq("platform", "youtube").in("platform_id", ids),
+        sb.from("mixes").select("platform_id").eq("platform", "youtube").in("platform_id", ids),
+      ]);
+      for (const r of [...(kt.data ?? []), ...(km.data ?? [])]) known.add(r.platform_id as string);
+    }
+    const todo = entries.filter((e) => !known.has(e.videoId));
+
     // Runtimes (optional): needs YOUTUBE_API_KEY. A failure here never blocks the scan.
     const durations = new Map<string, number>();
     const apiKey = process.env.YOUTUBE_API_KEY;
-    if (apiKey && entries.length) {
-      try { (await fetchDurations(entries.map((e) => e.videoId), apiKey)).forEach((v, k) => durations.set(k, v)); } catch { /* leave runtimes empty */ }
+    if (apiKey && todo.length) {
+      try { (await fetchDurations(todo.map((e) => e.videoId), apiKey)).forEach((v, k) => durations.set(k, v)); } catch { /* leave runtimes empty */ }
     }
 
     // Sort each upload into: a track, a mix (DJ set / podcast / radio show), or skip.
     type MixRow = { title: string; dj_name: string | null; show_or_channel: string; uploaded_at: string | null; duration_seconds: number | null; artwork_url: string; source_url: string; platform: string; platform_id: string; embed_url: string; tracklist_status: string; status: string; genre: string };
     const rows: { title: string; artist_name: string; source_url: string; platform: string; platform_id: string; embed_url: string; artwork_url: string; released_on: string | null; status: string; source_name: string; genre: string; norm_key: string; duration_seconds: number | null }[] = [];
     const mixRows: MixRow[] = [];
-    for (const e of entries) {
+    for (const e of todo) {
       const dur = durations.get(e.videoId) ?? null;
       if (e.isShort || looksLikeShort(e.title) || (dur != null && dur <= 60) || SKIP_WORDS.test(e.title)) { skipped++; continue; } // Shorts and non-music uploads
       if (isMixTitle(e.title) || (dur != null && dur >= 1500)) {

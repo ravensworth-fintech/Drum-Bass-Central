@@ -1,92 +1,32 @@
 "use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase-browser";
-import { AddSource } from "@/components/AddSource";
-import { IngestButton } from "@/components/IngestButton";
+import { usePathname } from "next/navigation";
 import { useDeviceView } from "@/components/DeviceProvider";
-import { usePdfSource } from "@/lib/pdf-source";
+import { useSession } from "@/lib/use-session";
 
+/** Right side of the header: Likes (styled like the old INGEST button) and Dashboard (styled like the genre buttons).
+ *  Account info, INGEST, ADD +, Discover, PDF and Sign out all live on the Dashboard page now. */
 export function AuthNav() {
-  const { mobile, setView } = useDeviceView();
-  const [email, setEmail] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
-  const [admin, setAdmin] = useState(false);
-  const [open, setOpen] = useState(false);
-  const pdf = usePdfSource(); // the list on the current page, if it has one
-  const [pdfBusy, setPdfBusy] = useState(false);
-
-  useEffect(() => {
-    const supabase = createClient();
-    const checkAdmin = async (id?: string) => {
-      if (!id) { setAdmin(false); return; }
-      const { data } = await supabase.from("profiles").select("is_admin").eq("id", id).maybeSingle();
-      setAdmin(!!data?.is_admin);
-    };
-    supabase.auth.getUser().then(({ data }) => { setEmail(data.user?.email ?? null); setReady(true); checkAdmin(data.user?.id); });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => { setEmail(session?.user?.email ?? null); checkAdmin(session?.user?.id); });
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  async function downloadPdf() {
-    if (!pdf || !pdf.tracks.length || pdfBusy) return;
-    setPdfBusy(true);
-    try {
-      const { downloadTrackListPdf } = await import("@/lib/pdf"); // loaded only when needed
-      downloadTrackListPdf(pdf.title, pdf.tracks);
-      setOpen(false);
-    } finally { setPdfBusy(false); }
-  }
-
-  const signOut = async () => { await createClient().auth.signOut(); window.location.href = "/"; };
-
-  if (!ready) return <span className="ml-auto" />;
-  if (!email) return <Link href="/login" className={`ml-auto text-sm hover:text-white ${mobile ? "border border-white/20 px-3 py-2 text-white/80" : "text-white/50"}`}>Sign in</Link>;
-
-  if (mobile) return (
-    <div className="relative ml-auto">
-      {open && <button aria-hidden tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />}
-      <button onClick={() => setOpen(!open)} aria-label="Account menu" aria-expanded={open}
-        className="relative z-50 flex h-10 w-10 items-center justify-center border border-white/20 text-lg text-white/80">☰</button>
-      {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-64 space-y-3 border border-white/20 bg-black p-4 text-white shadow-xl">
-          <div className="truncate text-xs text-white/50">{email}</div>
-          {admin && <div className="flex items-start gap-3"><IngestButton /><AddSource /></div>}
-          <button onClick={() => { setOpen(false); setView("desktop"); }} className="w-full border border-white/20 py-2.5 text-xs uppercase tracking-widest text-white/70">Desktop site</button>
-          <button onClick={signOut} className="w-full border border-white/20 py-2.5 text-xs uppercase tracking-widest text-white/70">Sign out</button>
-        </div>
-      )}
-    </div>
-  );
-
+  const { mobile } = useDeviceView();
+  const { ready, email } = useSession();
+  const path = usePathname();
+  const likesOn = path.startsWith("/liked");
+  const dashOn = path.startsWith("/dashboard");
+  const size = mobile ? "px-2.5 py-2 text-[11px] tracking-wider" : "px-3 py-1.5 text-xs tracking-widest";
   return (
-    <div className="ml-auto flex items-center gap-4 text-sm text-white/50">
-      {admin && <><IngestButton /><AddSource /></>}
-      <div className="relative">
-        {open && <button aria-hidden tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-40 cursor-default" />}
-        <button onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}
-          className="relative z-50 flex items-center gap-1.5 text-white/70 hover:text-white">Account <span aria-hidden className="text-[10px]">{open ? "▴" : "▾"}</span></button>
-        {open && (
-          <div role="menu" className="absolute right-0 top-full z-50 mt-2 w-64 border border-white/20 bg-black p-4 text-white shadow-xl">
-            <div className="truncate text-xs text-white/50">{email}</div>
-            {pdf && (
-              <button role="menuitem" onClick={downloadPdf} disabled={pdfBusy || !pdf.tracks.length}
-                className="mt-3 w-full border border-white/20 px-3 py-2 text-left text-xs uppercase tracking-widest text-white/70 hover:border-[#c6ff00] hover:text-[#c6ff00] disabled:opacity-40">
-                {pdfBusy ? "Preparing…" : "Download PDF"}
-                <span className="mt-0.5 block text-[10px] normal-case tracking-normal text-white/40">{pdf.title} · {pdf.tracks.length} track{pdf.tracks.length === 1 ? "" : "s"}</span>
-              </button>
-            )}
-            <button role="menuitem" onClick={signOut} className="mt-3 w-full border border-white/20 py-2 text-xs uppercase tracking-widest text-white/70 hover:border-white/50 hover:text-white">Sign out</button>
-          </div>
-        )}
-      </div>
+    <div className="ml-auto flex items-center gap-2">
+      <Link href="/liked" aria-current={likesOn ? "page" : undefined}
+        className={`border border-[#c6ff00] font-bold uppercase ${size} ${likesOn ? "bg-[#c6ff00] text-black" : "text-[#c6ff00] hover:bg-[#c6ff00] hover:text-black"}`}>
+        <span aria-hidden className="mr-1">♥</span>Likes
+      </Link>
+      {!ready ? null : email ? (
+        <Link href="/dashboard" aria-current={dashOn ? "page" : undefined}
+          className={`border font-bold uppercase ${size} ${dashOn ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/20 text-white/70 hover:text-white"}`}>
+          Dashboard
+        </Link>
+      ) : (
+        <Link href="/login" className={`ml-1 text-sm hover:text-white ${mobile ? "border border-white/20 px-3 py-2 text-white/80" : "text-white/50"}`}>Sign in</Link>
+      )}
     </div>
   );
 }

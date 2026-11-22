@@ -31,7 +31,7 @@ auto-publish; uncertain ones stay `pending` / `tracklist_candidates` for admin r
 `/api/ingest` reads each enabled `youtube` row in `sources` via the channel's free public feed, turns
 "Artist - Title" uploads into published tracks (with embed + thumbnail), skips mixes/podcasts/unparseable titles,
 dedupes, and logs to `scan_history`. Needs env vars `SUPABASE_SERVICE_ROLE_KEY` and `CRON_SECRET` (any long random string).
-Run it by hand: `https://YOUR-SITE.vercel.app/api/ingest?secret=YOUR_CRON_SECRET`. Vercel Cron calls it daily (`vercel.json`).
+Run it by hand: `https://YOUR-SITE.vercel.app/api/ingest?secret=YOUR_CRON_SECRET`. A Supabase schedule calls it every 2 hours (see "Dashboard, Discover and the 2-hour schedule" below).
 Add channels by inserting rows into `sources` (see `supabase/seed_sources.sql`).
 
 ## Cleanup and review queue
@@ -54,7 +54,7 @@ Setup, in the Supabase SQL Editor, in this order: `supabase/add_house.sql` (adds
 Add a single House channel later: `/api/ingest?secret=...&name=Name&add=https://www.youtube.com/@Handle&genre=house`.
 
 ## ADD + button (admins only)
-Run `supabase/make_me_admin.sql` once (with your login email) so your account has `profiles.is_admin = true`. The ADD + button then appears next to Sign out.
+Run `supabase/make_me_admin.sql` once (with your login email) so your account has `profiles.is_admin = true`. The ADD + button then appears on the Dashboard page.
 Paste a YouTube channel link, pick D&B or House, and the site adds it to `sources`, scans it immediately (its newest ~15 uploads) and reloads.
 The route `/api/add-source` checks your login and `is_admin` on the server, so nobody else can add sources. Needs `SUPABASE_SERVICE_ROLE_KEY`.
 
@@ -63,8 +63,8 @@ Run `supabase/add_bands.sql` once. The Bands tab shows only channels added with 
 and appears in the Likes toggle. Tick "artist's own channel" for a band's own channel so uploads titled just with the song name get the band as artist.
 
 ## INGEST button (admins only)
-Next to ADD +. Scans every enabled channel, works through the whole list in rounds (each round is one ~40 second server run), then reloads the page.
-It uses your sign-in (`/api/run-ingest`), so no secret goes in the address bar. The scheduled run in `vercel.json` is separate and still calls `/api/ingest` with `CRON_SECRET`.
+On the Dashboard page, next to ADD +. Scans every enabled channel, works through the whole list in rounds (each round is one ~40 second server run), then reloads the page.
+It uses your sign-in (`/api/run-ingest`), so no secret goes in the address bar. The scheduled run (Supabase pg_cron) is separate and calls `/api/ingest` with `CRON_SECRET`.
 
 ## SoundCloud (RSS)
 ADD + accepts a `soundcloud.com/artist` link (or a `feeds.soundcloud.com/users/soundcloud:users:ID/sounds.rss` link). The account becomes a `soundcloud` source and is scanned
@@ -84,3 +84,26 @@ The queue button in the player bar (list icon, with a count) shows what's queued
 
 ## Keyboard shortcuts
 Space = play/pause, L = like, left/right arrows = back/forward 5 seconds (works on every page while a song is loaded; ignored while typing in a field).
+
+## Dashboard, Discover and the 2-hour schedule
+**Header (right side):** `Likes` (lime outline, same look as the old INGEST button) and `Dashboard` (same look as the genre buttons). Signed-out visitors see `Likes` and `Sign in`.
+The Likes link no longer appears in the left-hand links or the phone's bottom tab bar (the bar now has 6 tabs).
+
+**Dashboard (`/dashboard`)** replaces the old Account menu:
+- Account: your email, Desktop/Mobile site switch, Sign out.
+- Track list PDF: pick Fresh Fire, D&B, House, Dubstep, Bands or Likes and download "Artist - Title" for the newest 1,000 tracks (or all likes).
+  This replaces the old menu's "Download PDF", which exported whatever list the page you were on was showing (filters applied). `usePublishPdf` is still called by the list pages but nothing reads it any more.
+- Channels (admins): INGEST and ADD +, unchanged, plus a link to Discover with a count of waiting suggestions.
+- Followed channels (admins): every YouTube and SoundCloud source with its genre, last scan time and a "last scan failed" flag. Search and genre filter.
+  **Remove** deletes the source row (and its scan log) so it is no longer scanned. Tracks and mixes already on the site stay, unless you tick "Also hide its tracks and mixes",
+  which sets them to `rejected` (hidden, not deleted; likes on those tracks stop showing). A removed channel is remembered so Discover never suggests it again.
+
+**Discover (`/discover`, admins only):** the daily job (`/api/discover`) counts the artists credited on published tracks, skips anyone already followed (including each half of "A & B"),
+and for the top 10 who are credited on at least 2 tracks looks up their YouTube channel with the official search (`YOUTUBE_API_KEY`, 100 quota units per search; without a key it falls back to YouTube's search page).
+A channel is only suggested when its name matches exactly and it has uploaded within the last year. Each card shows the facts (credits, subscribers, last upload, the channel's own description), a genre choice,
+an "artist's own channel" tick and Add / Skip. Add follows the channel and scans it now. Skip is remembered. Run `supabase/add_discover.sql` once first.
+By hand: `/api/discover?secret=YOUR_CRON_SECRET` (add `&max=3` to cap the searches).
+
+**Schedule (free, on Supabase):** run `supabase/schedule_ingest.sql` once, after putting your `CRON_SECRET` in it. It creates four pg_cron jobs that call your site with pg_net:
+ingest every 2 hours, tracklists daily, Discover daily, and a daily cleanup that keeps 14 days of scan logs. `vercel.json` no longer has any crons, so **nothing is scheduled until that SQL has been run**.
+Ingest now skips videos that are already saved before asking YouTube for runtimes, which keeps API quota use low.

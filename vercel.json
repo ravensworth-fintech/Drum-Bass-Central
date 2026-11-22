@@ -1,7 +1,1 @@
-{
-  "framework": "nextjs",
-  "crons": [
-    { "path": "/api/ingest", "schedule": "0 6 * * *" },
-    { "path": "/api/ingest?tracklists=1", "schedule": "30 6 * * *" }
-  ]
-}
+{ "framework": "nextjs" }

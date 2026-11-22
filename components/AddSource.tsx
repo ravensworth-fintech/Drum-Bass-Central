@@ -6,7 +6,7 @@ import { useIsMobile } from "@/components/DeviceProvider";
 type ScanResult = { ok?: boolean; error?: string; found?: number; added?: number; mixes_added?: number; skipped?: number };
 
 /** "ADD +" (admins only): paste a YouTube or SoundCloud link, pick a genre, and the site adds it as a source, scans it and reloads. */
-export function AddSource() {
+export function AddSource({ align = "right" }: { align?: "left" | "right" }) {
   const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState("");
@@ -43,7 +43,7 @@ export function AddSource() {
     <div className="relative">
       <button onClick={() => setOpen(!open)} className="border border-[#c6ff00] px-3 py-1 text-xs font-bold uppercase tracking-widest text-[#c6ff00] hover:bg-[#c6ff00] hover:text-black">ADD +</button>
       {open && (
-        <div className={`z-[60] border border-white/20 bg-black p-4 text-white shadow-xl ${mobile ? "fixed inset-x-3 top-20" : "absolute right-0 z-20 mt-2 w-80"}`}>
+        <div className={`z-[60] border border-white/20 bg-black p-4 text-white shadow-xl ${mobile ? "fixed inset-x-3 top-20" : `absolute ${align === "left" ? "left-0" : "right-0"} z-20 mt-2 w-80`}`}>
           <label className="mb-1 block text-xs uppercase tracking-widest text-white/60">YouTube channel link</label>
           <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} autoFocus
             placeholder="youtube.com/@Channel or soundcloud.com/artist" className="mb-3 w-full border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
