@@ -53,7 +53,7 @@ Setup, in the Supabase SQL Editor, in this order: `supabase/add_house.sql` (adds
 (artists, labels and mix channels). Then open `/api/ingest?secret=...` repeatedly until `not_reached_run_again` is gone.
 Add a single House channel later: `/api/ingest?secret=...&name=Name&add=https://www.youtube.com/@Handle&genre=house`.
 
-## ADD + button (admins only)
+## ADD + button (any signed-in account; see "Per-user channels" below)
 Run `supabase/make_me_admin.sql` once (with your login email) so your account has `profiles.is_admin = true`. The ADD + button then appears on the Dashboard page.
 Paste a YouTube channel link, pick D&B or House, and the site adds it to `sources`, scans it immediately (its newest ~15 uploads) and reloads.
 The route `/api/add-source` checks your login and `is_admin` on the server, so nobody else can add sources. Needs `SUPABASE_SERVICE_ROLE_KEY`.
@@ -107,3 +107,15 @@ By hand: `/api/discover?secret=YOUR_CRON_SECRET` (add `&max=3` to cap the search
 **Schedule (free, on Supabase):** run `supabase/schedule_ingest.sql` once, after putting your `CRON_SECRET` in it. It creates four pg_cron jobs that call your site with pg_net:
 ingest every 2 hours, tracklists daily, Discover daily, and a daily cleanup that keeps 14 days of scan logs. `vercel.json` no longer has any crons, so **nothing is scheduled until that SQL has been run**.
 Ingest now skips videos that are already saved before asking YouTube for runtimes, which keeps API quota use low.
+
+## Per-user channels, share links (run `supabase/add_per_user.sql` once BEFORE deploying this update)
+**Channels.** Channels and tracks stay in one shared pool (a channel several people follow is stored and scanned once). Each account has its own list of followed channels (`user_sources`).
+Every list (Fresh Fire, D&B, House, Dubstep, Bands, Mixes, the PDF export) is read from the views `my_tracks` / `my_mixes`, which show only the channels the signed-in person follows.
+Signed-out visitors see the **starter set**: every channel that existed before this update (`sources.is_starter = true`), plus any channel an admin adds from now on.
+A brand-new account starts empty and sees a "Follow the starter channels" button. The SQL file subscribes admin accounts to every existing channel, so nothing changes for you.
+**Adding.** ADD + works for every signed-in account. Admins: no limit, and what they add joins the starter set. Everyone else: 15 new channels per rolling 24 hours (`DAILY_ADD_LIMIT` in `lib/follow.ts`, logged in `source_add_log`), no total cap, and their channels stay out of the starter set.
+**Removing.** Remove only takes the channel off your own list. Admins also get an "Everyone" tab on the Dashboard with the old "Remove for everyone" (with the hide-tracks option) and a Follow button.
+**Scanning.** The 2-hour schedule and the INGEST button scan the starter set plus every channel at least one person follows (`scannable_sources` view). A channel nobody follows and that is not in the starter set is left alone.
+**Share link.** Dashboard -> Share your likes creates `/shared/<64-character code>`. Anyone with it can see your likes live, play them, select tracks and Copy Links. Signed-in viewers can like a track from there onto their own account (signed-out viewers are sent to sign in and come back).
+"New link" replaces the code (the old one stops working); "Turn off" deletes it. The page is read by the `shared_likes` function, which returns only that person's liked, published tracks.
+**Speed.** The first page of each list loads in the browser (the server can't tell who is signed in), alongside the channel list and the sign-in check; the last page seen is remembered for the tab (`lib/list-cache.ts`) and cleared on sign-in, sign-out and any follow/unfollow.

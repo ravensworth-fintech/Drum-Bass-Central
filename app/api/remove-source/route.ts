@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/require-admin";
+import { requireUser } from "@/lib/require-user";
 import { nameKeyOf } from "@/lib/discover";
 
 export const dynamic = "force-dynamic";
@@ -7,21 +7,33 @@ export const dynamic = "force-dynamic";
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
 /**
- * Powers the Remove button on the Dashboard. Body: { id, hideTracks?: boolean }. Admin only.
- * Stops following the channel (its row in `sources` is deleted, along with its scan log). Tracks and mixes already on the site stay,
- * unless hideTracks is true: then every track and mix from that channel is set to `rejected`, which hides it (nothing is deleted).
- * The channel is also remembered so Discover never suggests it again.
+ * Powers the Remove button on the Dashboard. Body: { id, scope?: "everyone", hideTracks?: boolean }.
+ *
+ * Default (everyone, admins included): stop following the channel. Only the caller's own list changes; other people keep it,
+ * and the channel's tracks stay in the shared pool.
+ *
+ * scope "everyone" (admins only): the old behavior. The channel is deleted from the site, so nobody follows it any more.
+ * Tracks and mixes already on the site stay, unless hideTracks is true: then every track and mix from that channel is set to
+ * `rejected`, which hides it (nothing is deleted). The channel is also remembered so Discover never suggests it again.
  */
 export async function POST(req: Request) {
-  const a = await requireAdmin(req);
-  if (!a.ok) return fail(a.error, a.status);
-  let body: { id?: string; hideTracks?: boolean };
+  const u = await requireUser(req);
+  if (!u.ok) return fail(u.error, u.status);
+  let body: { id?: string; scope?: string; hideTracks?: boolean };
   try { body = await req.json(); } catch { return fail("Bad request."); }
   if (!body.id) return fail("Bad request.");
-  const sb = a.sb;
+  const sb = u.sb;
 
   const { data: src } = await sb.from("sources").select("id,name,url,platform_id,genre").eq("id", body.id).maybeSingle();
   if (!src) return fail("That channel is already gone. Refresh the list.", 404);
+
+  if (body.scope !== "everyone") {
+    const del = await sb.from("user_sources").delete().eq("user_id", u.userId).eq("source_id", src.id);
+    if (del.error) return fail(del.error.message, 500);
+    return NextResponse.json({ ok: true, name: src.name, scope: "mine" });
+  }
+
+  if (!u.isAdmin) return fail("Only an admin can remove a channel for everyone.", 403);
 
   let hiddenTracks = 0, hiddenMixes = 0;
   if (body.hideTracks) {
@@ -33,7 +45,7 @@ export async function POST(req: Request) {
     hiddenMixes = m.data?.length ?? 0;
   }
 
-  const del = await sb.from("sources").delete().eq("id", src.id);
+  const del = await sb.from("sources").delete().eq("id", src.id); // follows and scan log go with it
   if (del.error) return fail(del.error.message, 500);
 
   // Never suggest it again. Best effort: if supabase/add_discover.sql has not been run yet, this is simply skipped.
@@ -42,5 +54,5 @@ export async function POST(req: Request) {
     { onConflict: "name_key" },
   );
 
-  return NextResponse.json({ ok: true, name: src.name, hiddenTracks, hiddenMixes });
+  return NextResponse.json({ ok: true, name: src.name, scope: "everyone", hiddenTracks, hiddenMixes });
 }

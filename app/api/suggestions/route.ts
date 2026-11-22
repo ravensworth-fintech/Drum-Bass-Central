@@ -58,6 +58,7 @@ export async function POST(req: Request) {
       src = data as Source;
     }
     await sb.from("source_suggestions").update({ status: "approved", decided_at: new Date().toISOString() }).eq("id", s.id);
+    await sb.from("user_sources").upsert({ user_id: a.userId, source_id: src.id }, { onConflict: "user_id,source_id", ignoreDuplicates: true }); // the admin follows it too
     const scan = await scanAny(sb, src);
     return NextResponse.json({ ok: true, already, name: src.name, genre: src.genre ?? genre, scan });
   } catch (e) {

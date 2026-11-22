@@ -2,10 +2,12 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useIsMobile } from "@/components/DeviceProvider";
+import { clearListCache } from "@/lib/list-cache";
 
 type ScanResult = { ok?: boolean; error?: string; found?: number; added?: number; mixes_added?: number; skipped?: number };
 
-/** "ADD +" (admins only): paste a YouTube or SoundCloud link, pick a genre, and the site adds it as a source, scans it and reloads. */
+/** "ADD +" (any signed-in account): paste a YouTube or SoundCloud link, pick a genre, and the channel is added to YOUR list (and to the site, if it is new), scanned and the page reloads.
+ *  Admins can add without limit; everyone else gets 15 new channels per rolling 24 hours (the server enforces it). */
 export function AddSource({ align = "right" }: { align?: "left" | "right" }) {
   const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
@@ -30,8 +32,11 @@ export function AddSource({ align = "right" }: { align?: "left" | "right" }) {
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.ok) throw new Error(json.error ?? `Something went wrong (HTTP ${res.status}).`);
       const scan: ScanResult = json.scan ?? {};
-      if (scan.ok === false) throw new Error(`${json.name} was ${json.already ? "already in your sources" : "added"}, but the scan failed: ${scan.error}`);
-      setMsg({ text: `${json.already ? "Already a source: " : "Added "}${json.name}. ${scan.added ?? 0} new tracks, ${scan.mixes_added ?? 0} new mixes. Refreshing…` });
+      if (scan.ok === false) throw new Error(`${json.name} was added to your channels, but the scan failed: ${scan.error}`);
+      clearListCache();
+      if (json.alreadyFollowing) { setMsg({ text: `You already follow ${json.name}.` }); setBusy(false); return; }
+      const left = typeof json.addsLeft === "number" ? ` ${json.addsLeft} new channel${json.addsLeft === 1 ? "" : "s"} left today.` : "";
+      setMsg({ text: `Added ${json.name}${json.existed ? " (already on the site)" : ""}. ${scan.added ?? 0} new tracks, ${scan.mixes_added ?? 0} new mixes.${left} Refreshing…` });
       setTimeout(() => window.location.reload(), 1500);
     } catch (e) {
       setMsg({ text: e instanceof Error ? e.message : String(e), bad: true });

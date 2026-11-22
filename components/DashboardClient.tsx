@@ -8,6 +8,8 @@ import { IngestButton } from "@/components/IngestButton";
 import { AddSource } from "@/components/AddSource";
 import { PdfExport } from "@/components/PdfExport";
 import { SourcesManager } from "@/components/SourcesManager";
+import { ShareLikes } from "@/components/ShareLikes";
+import { clearListCache } from "@/lib/list-cache";
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -43,7 +45,7 @@ export default function DashboardClient() {
   const { mobile, auto, setView } = useDeviceView();
   const pending = usePendingCount(admin);
 
-  async function signOut() { await createClient().auth.signOut(); window.location.href = "/"; }
+  async function signOut() { await createClient().auth.signOut(); clearListCache(); window.location.href = "/"; }
 
   if (!ready) return <p className="text-sm text-white/50">Loading…</p>;
   if (!email) {
@@ -72,25 +74,38 @@ export default function DashboardClient() {
         </div>
       </Section>
 
-      <Section title="Track list PDF" hint="Artist - Title for a whole list: the newest 1,000 tracks, or all of your likes.">
+      <Section title="Channels" hint="Every list on the site shows only the channels you follow. New uploads are scanned automatically every 2 hours.">
+        <div className="space-y-4">
+          {admin && (
+            <div className="flex items-start gap-4">
+              <IngestButton align="left" />
+              <p className="pt-1.5 text-xs text-white/50">Scan every starter and followed channel for new tracks and mixes now.</p>
+            </div>
+          )}
+          <div className="flex items-start gap-4">
+            <AddSource align="left" />
+            <p className="pt-1.5 text-xs text-white/50">
+              Follow a YouTube channel or SoundCloud account.{" "}
+              {admin ? "No limit for admins; channels you add also join the starter set that signed-out visitors see." : "You can add 15 new channels per 24 hours."}
+            </p>
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Your channels" hint="Removing a channel only removes it from your own lists. Nobody else is affected, and your likes stay.">
+        <SourcesManager isAdmin={admin} />
+      </Section>
+
+      <Section title="Share your likes" hint="A read-only link to your Likes page. Viewers can play, select tracks and copy their links.">
+        <ShareLikes />
+      </Section>
+
+      <Section title="Track list PDF" hint="Artist - Title for a whole list: the newest 1,000 tracks from your channels, or all of your likes.">
         <PdfExport />
       </Section>
 
       {admin && (
         <>
-          <Section title="Channels" hint="New uploads are scanned automatically every 2 hours. These run it by hand or follow something new.">
-            <div className="space-y-4">
-              <div className="flex items-start gap-4">
-                <IngestButton align="left" />
-                <p className="pt-1.5 text-xs text-white/50">Scan every channel for new tracks and mixes now.</p>
-              </div>
-              <div className="flex items-start gap-4">
-                <AddSource align="left" />
-                <p className="pt-1.5 text-xs text-white/50">Follow a YouTube channel or SoundCloud account.</p>
-              </div>
-            </div>
-          </Section>
-
           <Section title="Discover" hint="Channels of artists credited on tracks you already have. Checked once a day.">
             <div className="flex flex-wrap items-center gap-4">
               <Link href="/discover" className="border border-[#c6ff00] px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-[#c6ff00] hover:bg-[#c6ff00] hover:text-black">
@@ -98,10 +113,6 @@ export default function DashboardClient() {
               </Link>
               {pending === 0 && <p className="text-xs text-white/50">Nothing waiting right now.</p>}
             </div>
-          </Section>
-
-          <Section title="Followed channels">
-            <SourcesManager />
           </Section>
         </>
       )}

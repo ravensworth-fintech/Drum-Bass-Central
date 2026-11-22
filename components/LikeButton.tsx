@@ -18,7 +18,7 @@ export function LikeButton({ trackId, initiallyLiked, className = "" }: { trackI
   async function toggle() {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return (window.location.href = "/login");
+    if (!user) return (window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`); // sign in, then come straight back here
     const next = !liked;
     setLiked(next); // optimistic
     const { error } = next

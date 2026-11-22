@@ -10,7 +10,7 @@ const LISTS = [
 ] as const;
 type ListKey = (typeof LISTS)[number]["key"];
 
-/** "Artist - Title" PDF of a whole list (newest 1,000 tracks, or all your liked tracks). Moved here from the old Account menu. */
+/** "Artist - Title" PDF of a whole list (newest 1,000 tracks from the channels you follow, or all your liked tracks). */
 export function PdfExport() {
   const [list, setList] = useState<ListKey>("fresh");
   const [busy, setBusy] = useState(false);
@@ -30,7 +30,7 @@ export function PdfExport() {
           .filter((t): t is { artist_name: string; title: string } => !!t)
           .map((t) => ({ artist: t.artist_name, title: t.title }));
       } else {
-        let q = supabase.from("tracks").select("artist_name,title").eq("status", "published")
+        let q = supabase.from("my_tracks").select("artist_name,title")
           .order("released_on", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false }).limit(1000);
         q = list === "fresh" ? q.in("genre", DISCOVER_GENRES) : q.eq("genre", list);
         const { data, error } = await q;

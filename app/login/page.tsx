@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import { clearListCache } from "@/lib/list-cache";
+import { rememberNext, safeNext, takeNext } from "@/lib/next-path";
 
 type Mode = "signin" | "signup" | "code";
 const nice = (m: string) =>
@@ -16,7 +18,9 @@ export default function Login() {
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const done = () => { window.location.assign("/liked"); };
+  // ?next=/some/page sends the person back there after signing in (used when they try to like something on a shared page).
+  const nextParam = () => safeNext(new URLSearchParams(window.location.search).get("next"));
+  const done = () => { clearListCache(); const stored = takeNext(); window.location.assign(nextParam() ?? stored ?? "/liked"); };
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -24,6 +28,7 @@ export default function Login() {
     try {
       const sb = createClient();
       const redirect = `${window.location.origin}/auth/callback`;
+      rememberNext(nextParam()); // the email-link and confirm-email routes come back through /auth/callback, which reads this
       if (mode === "signin") {
         const { error } = await sb.auth.signInWithPassword({ email, password });
         if (error) throw error;

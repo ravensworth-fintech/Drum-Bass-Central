@@ -6,6 +6,8 @@ import { Mix, MixTracklist } from "@/components/MixTracklist";
 import { Genre, GenreToggle } from "@/components/GenreToggle";
 import { useIsMobile } from "@/components/DeviceProvider";
 import { PlayActions } from "@/components/PlayActions";
+import { authHeaders } from "@/lib/use-session";
+import { clearListCache, readListCache, writeListCache } from "@/lib/list-cache";
 
 const PAGE = 30;
 
@@ -16,22 +18,29 @@ const toTrack = (m: Mix): Track => ({
 });
 
 
-export function MixesBrowser({ initial, channels }: { initial: Mix[]; channels: { name: string; genre: string }[] }) {
+type Cached = { rows: Mix[]; more: boolean; channels: { name: string; genre: string }[]; followCount: number };
+
+/** Mixes from the channels the signed-in person follows (starter channels when signed out), from the `my_mixes` view. Loads in the browser; the last page seen is remembered for the tab. */
+export function MixesBrowser() {
   const m = useIsMobile();
-  const [mixes, setMixes] = useState<Mix[]>(initial.slice(0, PAGE));
-  const [hasMore, setHasMore] = useState(initial.length > PAGE);
+  const [mixes, setMixes] = useState<Mix[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [channels, setChannels] = useState<{ name: string; genre: string }[]>([]);
+  const [followCount, setFollowCount] = useState(0);
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [starting, setStarting] = useState(false);
   const [q, setQ] = useState("");
   const [channel, setChannel] = useState("");
   const [genre, setGenre] = useState<Genre>("");
   const [onlyTl, setOnlyTl] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const firstRun = useRef(true);
   const latest = useRef(0);
 
   async function fetchPage(offset: number): Promise<{ rows: Mix[]; more: boolean; error: string }> {
     let query = createClient()
-      .from("mixes")
+      .from("my_mixes")
       .select("id,title,dj_name,show_or_channel,uploaded_at,duration_seconds,artwork_url,source_url,embed_url,tracklist_status,tracklist_origin,genre")
       .order("uploaded_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
@@ -45,6 +54,35 @@ export function MixesBrowser({ initial, channels }: { initial: Mix[]; channels: 
     const { data, error } = await query;
     const all = (data ?? []) as Mix[];
     return { rows: all.slice(0, PAGE), more: all.length > PAGE, error: error?.message ?? "" };
+  }
+
+  // First load: remembered page at once (if any), then the real first page, the channel list and the sign-in state side by side.
+  useEffect(() => {
+    let live = true;
+    const cached = readListCache<Cached>("mixes");
+    if (cached) { setMixes(cached.rows); setHasMore(cached.more); setChannels(cached.channels); setFollowCount(cached.followCount); setLoading(false); }
+    (async () => {
+      const sb = createClient();
+      const [res, chs, mine, sess] = await Promise.all([fetchPage(0), sb.from("my_mix_channels").select("name,genre"), sb.rpc("my_channels"), sb.auth.getSession()]);
+      if (!live) return;
+      const list = ((chs.data ?? []) as { name: string; genre: string }[]).sort((a, b) => a.name.localeCompare(b.name));
+      const count = ((mine.data ?? []) as unknown[]).length;
+      setErr(res.error); setMixes(res.rows); setHasMore(res.more); setChannels(list); setFollowCount(count);
+      setSignedIn(!!sess.data.session); setLoading(false);
+      if (!res.error) writeListCache("mixes", { rows: res.rows, more: res.more, channels: list, followCount: count } satisfies Cached);
+    })();
+    return () => { live = false; };
+  }, []); // eslint-disable-line
+
+  async function startWithStarters() {
+    setStarting(true);
+    try {
+      const res = await fetch("/api/follow", { method: "POST", headers: await authHeaders(), body: JSON.stringify({ action: "starters" }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) throw new Error(json.error ?? `Something went wrong (HTTP ${res.status}).`);
+      clearListCache();
+      window.location.reload();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setStarting(false); }
   }
 
   useEffect(() => {
@@ -90,6 +128,9 @@ export function MixesBrowser({ initial, channels }: { initial: Mix[]; channels: 
         </label>
         {loading && <span className="text-xs text-white/50">Loading…</span>}
       </div>
+      {signedIn === false && (
+        <p className="mb-3 text-xs text-white/50">You&apos;re seeing the starter channels. <a href="/login" className="text-[#c6ff00] underline">Sign in</a> to follow your own.</p>
+      )}
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {mixes.length ? (<>
         <PlayActions tracks={queue} owner="mixes" />
@@ -103,7 +144,15 @@ export function MixesBrowser({ initial, channels }: { initial: Mix[]; channels: 
           })}
         </ul>
       </>) : (
-        !loading && <p className="text-white/50">{q || channel || genre || onlyTl ? "No mixes match that search." : "No mixes yet. They appear after the next scan."}</p>
+        !loading && (signedIn && followCount === 0 && !q && !channel && !genre && !onlyTl ? (
+          <div className="border border-white/10 p-5">
+            <p className="text-sm text-white/80">You aren&apos;t following any channels yet, so there&apos;s nothing here.</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button onClick={startWithStarters} disabled={starting} className="bg-[#c6ff00] px-4 py-2 text-xs font-bold uppercase tracking-widest text-black disabled:opacity-40">{starting ? "Following…" : "Follow the starter channels"}</button>
+              <a href="/dashboard" className="border border-white/20 px-4 py-2 text-xs uppercase tracking-widest text-white/70 hover:text-white">Open Dashboard</a>
+            </div>
+          </div>
+        ) : <p className="text-white/50">{q || channel || genre || onlyTl ? "No mixes match that search." : "No mixes yet. They appear after the next scan."}</p>)
       )}
       {hasMore && (
         <div className="mt-6 flex justify-center">

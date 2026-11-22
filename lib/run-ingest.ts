@@ -7,12 +7,13 @@ import { scanSoundcloud } from "@/lib/scan-soundcloud";
 export const scanAny = (sb: ReturnType<typeof admin>, s: Source) => (s.kind === "soundcloud" ? scanSoundcloud(sb, s) : scanSource(sb, s));
 
 /**
+ * Scans the starter channels plus every channel at least one person follows (the `scannable_sources` view); a channel nobody follows is left alone.
  * Least-recently-scanned first, in batches of 8, stopping after ~40 seconds. If the list is long, run it again.
  * `since` (an ISO time) skips every source that already has a scan logged at or after that time, so repeated
  * calls work through the whole list once instead of re-scanning the same sources.
  */
 export async function runIngest(sb: ReturnType<typeof admin>, since?: string) {
-  const { data: sources, error } = await sb.from("sources").select("id,name,url,kind,platform_id,is_artist,genre").in("kind", ["youtube", "soundcloud"]).eq("enabled", true)
+  const { data: sources, error } = await sb.from("scannable_sources").select("id,name,url,kind,platform_id,is_artist,genre").in("kind", ["youtube", "soundcloud"]).eq("enabled", true)
     .order("last_success_at", { ascending: true, nullsFirst: true });
   if (error) throw new Error(error.message);
   let list = (sources ?? []) as Source[];

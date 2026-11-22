@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import { clearListCache } from "@/lib/list-cache";
+import { takeNext } from "@/lib/next-path";
 
 export default function AuthCallback() {
   const [msg, setMsg] = useState("Signing you in…");
@@ -24,7 +26,8 @@ export default function AuthCallback() {
         data = (await supabase.auth.getSession()).data;
       }
       if (!data.session) return fail("No sign-in found. Request a new link and open it in the same browser you requested it from.");
-      window.location.replace("/liked");
+      clearListCache();
+      window.location.replace(takeNext() ?? "/liked");
     })();
   }, []);
 

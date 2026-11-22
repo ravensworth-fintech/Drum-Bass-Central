@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { DayDivider, Track, TrackRow, dayKey } from "@/components/TrackList";
+import { LikeButton } from "@/components/LikeButton";
 import { usePublishPdf } from "@/lib/pdf-source";
 import { Genre, GenreToggle } from "@/components/GenreToggle";
 import { useIsMobile } from "@/components/DeviceProvider";
@@ -20,7 +21,26 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: "title", label: "Song title" },
 ];
 
-export default function LikedClient() {
+type Page = { data: unknown; error: { message: string } | null };
+/** Reads a list 1,000 rows at a time (the API's page size), so nobody silently loses likes past the first 1,000. */
+async function pageAll<T>(get: (from: number, to: number) => PromiseLike<Page>): Promise<{ rows: T[]; error: string }> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await get(from, from + 999);
+    if (error) return { rows, error: error.message };
+    const batch = (data ?? []) as T[];
+    rows.push(...batch);
+    if (batch.length < 1000) return { rows, error: "" };
+  }
+}
+
+/** Your own Likes page, or (with shareCode) someone else's likes opened from their read-only link:
+ *  you can play, search, sort, select and Copy Links, and the heart likes a track onto YOUR account without touching theirs. */
+export default function LikedClient({ shareCode }: { shareCode?: string }) {
+  const shared = !!shareCode;
+  const owner = shared ? "shared-likes" : "liked";
+  const [viewerLiked, setViewerLiked] = useState<Set<string>>(new Set());
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const m = useIsMobile();
   const { updateQueue } = usePlayer();
   const [selectMode, setSelectMode] = useState(false); // phones: checkboxes + copy/select buttons only appear in Select mode
@@ -39,13 +59,26 @@ export default function LikedClient() {
   useEffect(() => {
     (async () => {
       const supabase = createClient();
+      if (shared) {
+        const { data: sess } = await supabase.auth.getSession();
+        setSignedIn(!!sess.session);
+        if (!/^[A-Za-z0-9_-]{16,128}$/.test(shareCode!)) { setRows([]); return; } // not a real code: nothing to look up
+        const [theirs, mine] = await Promise.all([
+          pageAll<Row>((a, b) => supabase.rpc("shared_likes", { share_code: shareCode }).range(a, b)),
+          sess.session ? pageAll<{ track_id: string }>((a, b) => supabase.from("liked_tracks").select("track_id").order("track_id").range(a, b)) : Promise.resolve({ rows: [] as { track_id: string }[], error: "" }),
+        ]);
+        if (theirs.error) setErr(theirs.error);
+        setViewerLiked(new Set(mine.rows.map((r) => r.track_id)));
+        setRows(theirs.rows.filter((r) => r.tracks));
+        return;
+      }
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) { setAuthed(false); return; }
-      const { data, error } = await supabase.from("liked_tracks").select("liked_at, tracks(*)");
-      if (error) setErr(error.message);
-      setRows(((data ?? []) as unknown as Row[]).filter((r) => r.tracks));
+      const res = await pageAll<Row>((a, b) => supabase.from("liked_tracks").select("liked_at, tracks(*)").order("liked_at", { ascending: false }).order("track_id").range(a, b));
+      if (res.error) setErr(res.error);
+      setRows(res.rows.filter((r) => r.tracks));
     })();
-  }, []);
+  }, []); // eslint-disable-line
 
   async function unlike(id: string) {
     const supabase = createClient();
@@ -91,7 +124,7 @@ export default function LikedClient() {
 
   // What is shown is what auto-play follows: filter, search or sort and the next track changes with it.
   const shownTracks = useMemo(() => shown.map((r) => r.tracks), [shown]);
-  useEffect(() => { updateQueue(shownTracks, "liked"); }, [shownTracks, updateQueue]);
+  useEffect(() => { updateQueue(shownTracks, owner); }, [shownTracks, updateQueue]);
   const pdfTracks = useMemo(() => shownTracks.map((t) => ({ artist: t.artist_name, title: t.title })), [shownTracks]);
   usePublishPdf("Likes", pdfTracks); // the Account menu's "Download PDF" exports this list
 
@@ -120,14 +153,22 @@ export default function LikedClient() {
     setTimeout(() => setCopied(""), 2500);
   }
 
-  if (!authed) return <p>Please <a className="text-[#c6ff00] underline" href="/login">sign in</a> to see your likes.</p>;
+  if (!shared && !authed) return <p>Please <a className="text-[#c6ff00] underline" href="/login">sign in</a> to see your likes.</p>;
   const btn = `border border-white/20 px-3 text-xs uppercase tracking-widest hover:border-white/50 ${m ? "py-2.5" : "py-1.5"}`;
   const field = `border border-white/20 px-3 text-sm ${m ? "w-full py-2.5" : "py-1.5"}`;
   const dirLabel = sortKey === "artist" || sortKey === "title" ? (asc ? "A → Z" : "Z → A") : (asc ? "Oldest first" : "Newest first");
   const showBoxes = !m || selectMode;
   return (
     <>
-      <h1 className="mb-4 text-2xl font-black uppercase sm:mb-6 sm:text-3xl">Likes</h1>
+      <h1 className="mb-4 text-2xl font-black uppercase sm:mb-6 sm:text-3xl">{shared ? "Shared likes" : "Likes"}</h1>
+      {shared && (
+        <p className="mb-4 text-xs text-white/50">
+          Someone shared these likes with you, read-only. You can play them, select tracks and copy their links.{" "}
+          {signedIn === false
+            ? <>To like a track onto your own account, <a className="text-[#c6ff00] underline" href={`/login?next=${encodeURIComponent(`/shared/${shareCode}`)}`}>sign in</a>.</>
+            : "The heart saves a track to your own likes."}
+        </p>
+      )}
 
       {m ? (
         <MobileFilters active={(q.trim() ? 1 : 0) + (channel ? 1 : 0) + (genre ? 1 : 0) + (sortKey !== "liked" || asc ? 1 : 0)}
@@ -151,7 +192,7 @@ export default function LikedClient() {
           {/* Row 1: genre buttons on the left, Shuffle / Random on the right */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <GenreToggle value={genre} onChange={pickGenre} withBands />
-            {shown.length > 0 && <PlayActions bare tracks={shownTracks} owner="liked" />}
+            {shown.length > 0 && <PlayActions bare tracks={shownTracks} owner={owner} />}
           </div>
           {/* Row 2: channel, sort and search */}
           <div className="flex flex-wrap items-center gap-3">
@@ -185,8 +226,8 @@ export default function LikedClient() {
       ) : null}
 
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
-      {rows && !shown.length && <p className="text-white/50">{rows.length ? "No likes match." : "Nothing here yet."}</p>}
-      {m && shown.length > 0 && <PlayActions tracks={shownTracks} owner="liked" />}
+      {rows && !shown.length && <p className="text-white/50">{rows.length ? "No likes match." : shared ? "Nothing here. This link may have been turned off, or nothing is shared yet." : "Nothing here yet."}</p>}
+      {m && shown.length > 0 && <PlayActions tracks={shownTracks} owner={owner} />}
       <ul className="divide-y divide-white/10">
         {shown.flatMap((r, i) => {
           const on = sel.has(r.tracks.id);
@@ -195,14 +236,16 @@ export default function LikedClient() {
           const day = dayOf(r);
           const divider = day && day !== (i ? dayOf(shown[i - 1]) : null) ? [<DayDivider key={`day-${day}-${i}`} day={day} />] : [];
           return [...divider,
-            <TrackRow key={r.tracks.id} t={r.tracks} showGenre={!genre} queue={shownTracks} owner="liked" extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
+            <TrackRow key={r.tracks.id} t={r.tracks} showGenre={!genre} queue={shownTracks} owner={owner} extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
               leading={showBoxes ? (
                 <button onClick={() => toggle(r.tracks.id)} aria-pressed={on} aria-label={on ? "Deselect track" : "Select track"}
                   className={`shrink-0 border text-sm font-bold leading-none ${m ? "h-8 w-8" : "h-6 w-6"} ${on ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/30"}`}>
                   {on ? "✓" : ""}
                 </button>
               ) : undefined}
-              action={<button onClick={() => unlike(r.tracks.id)} className={`text-[#c6ff00] ${m ? "flex h-11 w-11 items-center justify-center text-2xl" : ""}`} aria-label="Unlike">♥</button>} />];
+              action={shared
+                ? <LikeButton key={r.tracks.id + viewerLiked.has(r.tracks.id)} trackId={r.tracks.id} initiallyLiked={viewerLiked.has(r.tracks.id)} className={m ? "flex h-11 w-11 items-center justify-center text-2xl" : ""} />
+                : <button onClick={() => unlike(r.tracks.id)} className={`text-[#c6ff00] ${m ? "flex h-11 w-11 items-center justify-center text-2xl" : ""}`} aria-label="Unlike">♥</button>} />];
         })}
       </ul>
     </>
