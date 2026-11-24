@@ -29,3 +29,26 @@ export async function authHeaders(): Promise<Record<string, string>> {
   if (!token) throw new Error("Sign in first.");
   return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
 }
+
+// One shared "is anyone signed in?" answer for every row on a page (so 100 song rows don't each ask Supabase).
+let signedInNow: boolean | null = null;
+const listeners = new Set<(v: boolean) => void>();
+let started = false;
+function startSignedInWatch() {
+  if (started) return;
+  started = true;
+  const supabase = createClient();
+  const set = (v: boolean) => { signedInNow = v; listeners.forEach((l) => l(v)); };
+  supabase.auth.getSession().then(({ data }) => set(!!data.session));
+  supabase.auth.onAuthStateChange((_e, session) => set(!!session));
+}
+export function useSignedIn(): boolean {
+  const [v, setV] = useState<boolean>(signedInNow ?? false);
+  useEffect(() => {
+    startSignedInWatch();
+    listeners.add(setV);
+    if (signedInNow !== null) setV(signedInNow);
+    return () => { listeners.delete(setV); };
+  }, []);
+  return v;
+}

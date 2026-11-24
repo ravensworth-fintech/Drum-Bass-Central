@@ -1,3 +1,4 @@
+import { saveIngestStatus, summarize } from "@/lib/ingest-status";
 import { NextResponse } from "next/server";
 import { admin } from "@/lib/supabase-admin";
 import { fetchChannelFeed, fetchDurations, looksLikeShort, normKey, parseTrack, resolveChannelId } from "@/lib/youtube-feed";
@@ -151,6 +152,9 @@ export async function GET(req: Request) {
   // Least-recently-scanned first, in small batches, within a time budget. If the list is long, a second run picks up the rest.
   try {
     const r = await runIngest(sb);
+    const rs = r.results as { ok: boolean; added?: number; mixes_added?: number }[];
+    const tot = { scanned: rs.length, added: rs.reduce((n, x) => n + (x.added ?? 0), 0), mixes: rs.reduce((n, x) => n + (x.mixes_added ?? 0), 0), failed: rs.filter((x) => !x.ok).length, remaining: r.notReached.length };
+    await saveIngestStatus(sb, { at: new Date().toISOString(), by: "scheduled", ok: true, ...tot, message: summarize(tot) });
     return NextResponse.json({
       ran_at: new Date().toISOString(), sources: r.total, scanned: r.results.length,
       ...(r.notReached.length ? { not_reached_run_again: r.notReached } : {}), results: r.results,
