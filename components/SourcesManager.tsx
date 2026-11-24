@@ -37,6 +37,13 @@ export function SourcesManager({ isAdmin = false }: { isAdmin?: boolean }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
+  // "Change link" (admins): re-point a channel at the right YouTube channel / SoundCloud account. Two steps: look the link up, then confirm.
+  const [editId, setEditId] = useState<string | null>(null);
+  const [newUrl, setNewUrl] = useState("");
+  const [found, setFound] = useState<{ kind: string; title: string; latest: string[]; url: string } | null>(null);
+  const [hideOld, setHideOld] = useState(false);
+  const [editErr, setEditErr] = useState("");
+  const [editBusy, setEditBusy] = useState(false);
 
   const load = useCallback(async () => {
     setError(""); setSources(null);
@@ -79,6 +86,29 @@ export function SourcesManager({ isAdmin = false }: { isAdmin?: boolean }) {
     } catch (e) {
       setMsg({ text: e instanceof Error ? e.message : String(e), bad: true });
     } finally { setBusyId(null); }
+  }
+
+  const closeEdit = () => { setEditId(null); setNewUrl(""); setFound(null); setHideOld(false); setEditErr(""); };
+
+  async function lookUp(s: Src) {
+    if (editBusy) return;
+    setEditBusy(true); setEditErr(""); setFound(null);
+    try { setFound((await call("/api/update-source", { id: s.id, url: newUrl, check: true })).found); }
+    catch (e) { setEditErr(e instanceof Error ? e.message : String(e)); }
+    finally { setEditBusy(false); }
+  }
+
+  async function saveLink(s: Src) {
+    if (editBusy) return;
+    setEditBusy(true); setEditErr("");
+    try {
+      const json = await call("/api/update-source", { id: s.id, url: newUrl, hideOld });
+      clearListCache();
+      setSources((cur) => (cur ?? []).map((x) => (x.id === s.id ? { ...x, url: json.url, kind: json.kind, last_success_at: json.scan?.ok === false ? null : new Date().toISOString(), last_scan_ok: json.scan?.ok === false ? false : true, last_scan_error: json.scan?.error ?? null } : x)));
+      closeEdit();
+      setMsg({ text: `${json.name} now points at ${json.kind === "soundcloud" ? "SoundCloud" : "YouTube"} "${json.title}".${hideOld ? ` Hid ${json.hiddenTracks} old tracks and ${json.hiddenMixes} old mixes.` : ""}${json.scan?.ok === false ? ` The first scan failed (${json.scan.error}); it will retry on the next scheduled scan.` : ` First scan: ${json.scan?.added ?? 0} new tracks, ${json.scan?.mixes_added ?? 0} new mixes.`}`, bad: json.scan?.ok === false });
+    } catch (e) { setEditErr(e instanceof Error ? e.message : String(e)); }
+    finally { setEditBusy(false); }
   }
 
   async function followOne(s: Src) {
@@ -147,8 +177,12 @@ export function SourcesManager({ isAdmin = false }: { isAdmin?: boolean }) {
                       {everyoneView && s.followed && <span className="text-[#c6ff00]"> · you follow it</span>}
                     </p>
                   </div>
-                  {confirmId !== s.id && (
+                  {confirmId !== s.id && editId !== s.id && (
                     <div className="flex shrink-0 gap-2">
+                      {isAdmin && (
+                        <button onClick={() => { closeEdit(); setEditId(s.id); setMsg(null); setNewUrl(""); }}
+                          className="border border-white/20 px-3 py-1 text-xs uppercase tracking-widest text-white/70 hover:border-[#c6ff00] hover:text-[#c6ff00]">Change link</button>
+                      )}
                       {everyoneView && !s.followed && (
                         <button onClick={() => followOne(s)} disabled={busyId === s.id}
                           className="border border-[#c6ff00] px-3 py-1 text-xs uppercase tracking-widest text-[#c6ff00] hover:bg-[#c6ff00] hover:text-black disabled:opacity-40">Follow</button>
@@ -158,6 +192,31 @@ export function SourcesManager({ isAdmin = false }: { isAdmin?: boolean }) {
                     </div>
                   )}
                 </div>
+                {editId === s.id && (
+                  <div className="mt-3 border border-[#c6ff00]/40 p-3">
+                    <p className="text-xs text-white/80">Paste the correct YouTube channel or SoundCloud account link for {s.name}. The name stays the same, and this changes it for everyone who follows it.</p>
+                    <p className="mt-1 break-all text-[11px] text-white/40">Now: {s.url}</p>
+                    <input value={newUrl} onChange={(e) => { setNewUrl(e.target.value); setFound(null); setEditErr(""); }} placeholder="https://www.youtube.com/@Handle or https://soundcloud.com/name"
+                      aria-label="New channel link" className="mt-2 w-full border border-white/20 bg-transparent px-3 py-1.5 text-sm" />
+                    {found && (
+                      <div className="mt-2 border border-white/15 p-2 text-xs">
+                        <p className="text-[#c6ff00]">Found {found.kind === "soundcloud" ? "SoundCloud" : "YouTube"}: {found.title}</p>
+                        {found.latest.length > 0 && <p className="mt-1 text-white/50">Latest: {found.latest.map((t) => `“${t}”`).join(", ")}</p>}
+                        <label className="mt-2 flex items-start gap-2 text-white/60">
+                          <input type="checkbox" checked={hideOld} onChange={(e) => setHideOld(e.target.checked)} className="mt-0.5 accent-[#c6ff00]" />
+                          <span>Also hide the tracks and mixes already filed under {s.name} (use this if they came from the wrong account; nothing is deleted)</span>
+                        </label>
+                      </div>
+                    )}
+                    {editErr && <p className="mt-2 text-xs text-red-400">{editErr}</p>}
+                    <div className="mt-3 flex gap-2">
+                      {found
+                        ? <button onClick={() => saveLink(s)} disabled={editBusy} className="bg-[#c6ff00] px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-black disabled:opacity-40">{editBusy ? "Saving…" : "Use this channel"}</button>
+                        : <button onClick={() => lookUp(s)} disabled={editBusy || !newUrl.trim()} className="bg-[#c6ff00] px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-black disabled:opacity-40">{editBusy ? "Checking…" : "Check link"}</button>}
+                      <button onClick={closeEdit} disabled={editBusy} className="border border-white/20 px-4 py-1.5 text-xs uppercase tracking-widest text-white/70 hover:text-white">Cancel</button>
+                    </div>
+                  </div>
+                )}
                 {confirmId === s.id && (
                   <div className="mt-3 border border-red-400/40 p-3">
                     {everyoneView ? (<>
