@@ -1,4 +1,5 @@
 "use client";
+import { onItemRemoved } from "@/components/RemoveItemButton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { TrackList, Track, scSearchUrl } from "@/components/TrackList";
@@ -46,6 +47,9 @@ export function TracksBrowser({ genre, label }: { genre?: GenreKey; label: strin
   const firstRun = useRef(true);
   const latest = useRef(0);
   const owner = `tracks:${genre ?? "all"}`;
+
+  // A song removed with its X disappears from this list at once.
+  useEffect(() => onItemRemoved((d) => { if (d.kind === "track") setTracks((ts) => ts.filter((x) => x.id !== d.id)); }), []);
 
   // Keep the player's "what plays next" in step with what is on screen: filter or search and it follows the visible tracks.
   useEffect(() => { updateQueue(tracks, owner); }, [tracks, owner, updateQueue]);

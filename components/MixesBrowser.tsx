@@ -6,6 +6,7 @@ import { Mix, MixTracklist } from "@/components/MixTracklist";
 import { Genre, GenreToggle } from "@/components/GenreToggle";
 import { useIsMobile } from "@/components/DeviceProvider";
 import { PlayActions } from "@/components/PlayActions";
+import { onItemRemoved } from "@/components/RemoveItemButton";
 import { authHeaders } from "@/lib/use-session";
 import { clearListCache, readListCache, writeListCache } from "@/lib/list-cache";
 
@@ -55,6 +56,9 @@ export function MixesBrowser() {
     const all = (data ?? []) as Mix[];
     return { rows: all.slice(0, PAGE), more: all.length > PAGE, error: error?.message ?? "" };
   }
+
+  // A mix removed with its X disappears from this list at once.
+  useEffect(() => onItemRemoved((d) => { if (d.kind === "mix") setMixes((ms) => ms.filter((x) => x.id !== d.id)); }), []);
 
   // First load: remembered page at once (if any), then the real first page, the channel list and the sign-in state side by side.
   useEffect(() => {

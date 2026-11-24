@@ -10,6 +10,7 @@ import { usePlayer } from "@/components/PlayerProvider";
 import { CollapsibleSearch } from "@/components/CollapsibleSearch";
 import { MobileFilters } from "@/components/MobileFilters";
 import { PlayActions } from "@/components/PlayActions";
+import { onItemRemoved } from "@/components/RemoveItemButton";
 
 type Row = { liked_at: string; tracks: Track };
 type SortKey = "liked" | "posted" | "artist" | "title";
@@ -79,6 +80,13 @@ export default function LikedClient({ shareCode }: { shareCode?: string }) {
       setRows(res.rows.filter((r) => r.tracks));
     })();
   }, []); // eslint-disable-line
+
+  // A song removed with its X leaves this list too (its like is deleted on the server).
+  useEffect(() => onItemRemoved((d) => {
+    if (d.kind !== "track") return;
+    setRows((r) => r && r.filter((x) => x.tracks.id !== d.id));
+    setSel((s) => { const n = new Set(s); n.delete(d.id); return n; });
+  }), []);
 
   async function unlike(id: string) {
     const supabase = createClient();
@@ -236,7 +244,7 @@ export default function LikedClient({ shareCode }: { shareCode?: string }) {
           const day = dayOf(r);
           const divider = day && day !== (i ? dayOf(shown[i - 1]) : null) ? [<DayDivider key={`day-${day}-${i}`} day={day} />] : [];
           return [...divider,
-            <TrackRow key={r.tracks.id} t={r.tracks} showGenre={!genre} queue={shownTracks} owner={owner} extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
+            <TrackRow key={r.tracks.id} t={r.tracks} noRemove={shared} showGenre={!genre} queue={shownTracks} owner={owner} extra={`liked ${new Date(r.liked_at).toLocaleDateString()}`}
               leading={showBoxes ? (
                 <button onClick={() => toggle(r.tracks.id)} aria-pressed={on} aria-label={on ? "Deselect track" : "Select track"}
                   className={`shrink-0 border text-sm font-bold leading-none ${m ? "h-8 w-8" : "h-6 w-6"} ${on ? "border-[#c6ff00] bg-[#c6ff00] text-black" : "border-white/30"}`}>

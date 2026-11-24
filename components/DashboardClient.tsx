@@ -77,10 +77,7 @@ export default function DashboardClient() {
       <Section title="Channels" hint="Every list on the site shows only the channels you follow. New uploads are scanned automatically every 2 hours.">
         <div className="space-y-4">
           {admin && (
-            <div className="flex items-start gap-4">
-              <IngestButton align="left" />
-              <p className="pt-1.5 text-xs text-white/50">Scan every starter and followed channel for new tracks and mixes now.</p>
-            </div>
+            <IngestButton>Scan every starter and followed channel for new tracks and mixes now.</IngestButton>
           )}
           <div className="flex items-start gap-4">
             <AddSource align="left" />

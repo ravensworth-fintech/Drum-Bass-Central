@@ -7,6 +7,7 @@ import { isPlayable, usePlayer } from "./PlayerProvider";
 import { useIsMobile } from "./DeviceProvider";
 import { QueueIcon } from "./QueueIcon";
 import { PlayActions } from "./PlayActions";
+import { RemoveItemButton } from "./RemoveItemButton";
 
 export type Track = {
   id: string; title: string; artist_name: string; subgenre: string;
@@ -58,8 +59,8 @@ export const genreLabel = (g?: string) => (g === "house" ? "House" : g === "dubs
 const genreTint = (g?: string) => (g === "house" ? "bg-indigo-300/[0.07]" : g === "dubstep" ? "bg-fuchsia-300/[0.07]" : "");
 
 /** `owner` names the list this row belongs to (e.g. "liked"). The list can then tell the player when its visible tracks change, so auto-play follows what is on screen. */
-export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGenre, tintHouse, owner }: {
-  t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode; queue: Track[]; below?: React.ReactNode; noSC?: boolean; showGenre?: boolean; tintHouse?: boolean; owner?: string;
+export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGenre, tintHouse, owner, noRemove }: {
+  t: Track; leading?: React.ReactNode; extra?: string; action: React.ReactNode; queue: Track[]; below?: React.ReactNode; noSC?: boolean; showGenre?: boolean; tintHouse?: boolean; owner?: string; noRemove?: boolean;
 }) {
   const { current, playing, play, toggle, addToQueue } = usePlayer();
   const mobile = useIsMobile();
@@ -74,6 +75,7 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
       {mobile ? (added ? "✓" : <QueueIcon />) : added ? "✓ Added" : "+ Next"}
     </button>
   ) : null;
+  const removeBtn = noRemove ? null : <RemoveItemButton kind={t.kind === "mix" ? "mix" : "track"} id={t.id} title={t.title} artist={t.artist_name} />;
   const li = useRef<HTMLLIElement>(null);
   useEffect(() => { if (isCur) li.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [isCur]);
   const meta = [showGenre ? genreLabel(t.genre) : null, fmtDur(t.duration_seconds), t.subgenre !== "Unknown" ? t.subgenre : null, t.source_name, fmtDate(t.released_on), extra].filter(Boolean).join(" · ");
@@ -94,6 +96,7 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
         </div>
         {queueBtn}
         {action}
+        {removeBtn}
       </div>
       {below}
     </li>
@@ -118,6 +121,7 @@ export function TrackRow({ t, leading, extra, action, queue, below, noSC, showGe
         <a href={t.source_url} target="_blank" rel="noreferrer" title="Open original" className={chip}>{t.source_url.includes("youtube") ? "YT" : "↗"}</a>
         {queueBtn}
         {action}
+        {removeBtn}
       </div>
       {below}
     </li>
