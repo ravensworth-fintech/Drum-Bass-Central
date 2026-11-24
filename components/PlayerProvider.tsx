@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { toggleLikeById } from "@/lib/likes";
 import { useIsMobile } from "./DeviceProvider";
 import { QueueIcon } from "./QueueIcon";
-import { ShuffleIcon } from "./PlayIcons";
+import { ShuffleIcon, Back10Icon, Forward10Icon } from "./PlayIcons";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // ONE persistent YouTube player (official IFrame API) that lives in the layout. Because the same player keeps
@@ -220,7 +220,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       load(n);
       return;
     }
-    if (shuffleOn.current) {
+    if (shuffleOn.current && cur.current?.kind !== "mix") { // no shuffle on the Mixes tab
       if (d === -1) {
         const prev = hist.current.pop();
         if (prev) { anchor.current = prev; atStart.current = false; load(prev); return; }
@@ -302,9 +302,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const ctx = useMemo(() => ({ current, playing, play, toggle, addToQueue, updateQueue, shuffle, setShuffle, shuffleFrom, randomPlay }), [current, playing, play, toggle, addToQueue, updateQueue, shuffle, setShuffle, shuffleFrom, randomPlay]);
   const getPlayer = useCallback(() => (engine.current === "sc" ? (scReady.current ? scAdapter : null) : ready.current ? player.current : null), [scAdapter]);
-  // Keyboard shortcuts on every page: Space = play/pause, L = like, ←/→ = back/forward 5 seconds.
+  // Podcast-style jump buttons: move the playhead by `sec` seconds (negative = back), clamped to the song.
+  const seekBy = useCallback((sec: number) => {
+    const p = getPlayer();
+    if (!p) return;
+    const dur = p.getDuration?.() || 0;
+    const to = (p.getCurrentTime?.() || 0) + sec;
+    p.seekTo(dur ? Math.min(Math.max(0, to), Math.max(0, dur - 1)) : Math.max(0, to), true);
+  }, [getPlayer]);
+  // Keyboard shortcuts on every page: Space = play/pause, L = like, ←/→ = previous / next song.
   useEffect(() => {
-    const SEEK = 5;
     const isTyping = (el: EventTarget | null) => {
       const e = el as HTMLElement | null;
       if (!e) return false;
@@ -326,12 +333,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         toggleLikeById(t.id);
       } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
         if ((e.target as HTMLElement)?.tagName === "INPUT") return; // let the seek slider handle its own arrows
-        const p = getPlayer();
-        if (!p) return;
         e.preventDefault();
-        const dur = p.getDuration?.() || 0;
-        const to = (p.getCurrentTime?.() || 0) + (e.key === "ArrowRight" ? SEEK : -SEEK);
-        p.seekTo(dur ? Math.min(Math.max(0, to), Math.max(0, dur - 1)) : Math.max(0, to), true);
+        if (!e.repeat) stepRef.current(e.key === "ArrowRight" ? 1 : -1);
       }
     };
     // Firefox fires the button click on space *keyup*, so block that too while a track is loaded.
@@ -341,14 +344,16 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     return () => { window.removeEventListener("keydown", onKeyDown); window.removeEventListener("keyup", onKeyUp); };
-  }, [toggle, getPlayer]);
+  }, [toggle]);
   const skip = mobile ? "flex h-10 w-10 items-center justify-center text-xl text-white/80" : "flex h-12 w-12 items-center justify-center text-2xl text-white/80 hover:text-[#c6ff00]";
-  const shuffleBtn = (
+  const shuffleBtn = current?.kind === "mix" ? null : (
     <button onClick={() => setShuffle(!shuffle)} aria-label={shuffle ? "Shuffle on" : "Shuffle off"} aria-pressed={shuffle} title="Shuffle"
             className={`flex shrink-0 items-center justify-center ${shuffle ? "text-[#c6ff00]" : "text-white/60 hover:text-white"} ${mobile ? "h-10 w-9" : "h-12 w-12"}`}>
             <ShuffleIcon className={mobile ? "h-5 w-5" : "h-6 w-6"} />
           </button>
   );
+  const jump = mobile ? "flex h-10 w-10 items-center justify-center text-white/80" : "flex h-12 w-12 items-center justify-center text-white/80 hover:text-[#c6ff00]";
+  const jumpIcon = mobile ? "h-8 w-8" : "h-9 w-9";
   const queueBtn = (
     <button onClick={() => setShowQueue((v) => !v)} aria-label="Up Next" aria-expanded={showQueue} title="Up Next"
             className={`relative flex shrink-0 items-center justify-center ${showQueue || upNext.length ? "text-[#c6ff00]" : "text-white/60 hover:text-white"} ${mobile ? "h-10 w-9" : "h-12 w-12"}`}>
@@ -361,7 +366,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     <PlayerCtx.Provider value={ctx}>
       {children}
       <div ref={scHost} aria-hidden className="pointer-events-none fixed bottom-0 left-0 h-px w-px overflow-hidden opacity-0" /> {/* hidden SoundCloud player */}
-      {current && <div className={mobile ? "h-24" : "h-36"} />} {/* keeps the last rows clear of the bar */}
+      {current && <div className={mobile ? "h-36" : "h-36"} />} {/* keeps the last rows clear of the bar */}
       <div className={`fixed inset-x-0 z-50 border-t border-white/15 ${mobile ? "bottom-[calc(3.5rem+env(safe-area-inset-bottom))] bg-black" : "bottom-0 bg-black/95 backdrop-blur"} ${current ? "" : "hidden"}`}>
         {showQueue && current && (
           <div className="absolute inset-x-0 bottom-full max-h-[50vh] overflow-y-auto border-t border-white/15 bg-black/95 backdrop-blur">
@@ -391,17 +396,21 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         )}
         <div className="mx-auto max-w-5xl px-4">
         {mobile ? <div className="flex items-center gap-1"><div className="min-w-0 flex-1"><Progress key={current?.id} getPlayer={getPlayer} compact /></div>{shuffleBtn}{queueBtn}</div> : <Progress key={current?.id} getPlayer={getPlayer} />}
-        <div className={`flex items-center ${mobile ? "gap-2 pb-2 pt-1" : "gap-3 py-2 sm:gap-5"}`}>
+        <div className={`flex items-center ${mobile ? "flex-wrap gap-x-2 gap-y-1 pb-2 pt-1" : "gap-3 py-2 sm:gap-5"}`}>
           <div className={`relative aspect-video shrink-0 bg-black ${mobile ? "w-[72px]" : "w-28 sm:w-44"}`}><div ref={host} className="absolute inset-0" />{current && isSC(current) && <div className="absolute inset-0 bg-black">{current.artwork_url && <img src={current.artwork_url} alt="" className="h-full w-full object-cover" />}</div>}</div>
           <div className="min-w-0 flex-1">
             <div className={`truncate font-semibold ${mobile ? "text-sm" : "text-sm sm:text-base"}`}>{current?.title}</div>
             <div className={`truncate text-white/60 ${mobile ? "text-xs" : "text-xs sm:text-sm"}`}>{current?.artist_name}</div>
           </div>
-          {!mobile && <button onClick={() => stepRef.current(-1)} aria-label="Previous track" className={skip}>⏮</button>}
-          <button onClick={toggle} aria-label={playing ? "Pause" : "Play"}
-            className={`flex shrink-0 items-center justify-center bg-[#c6ff00] text-black hover:bg-white ${mobile ? "h-11 w-11 text-xl" : "h-14 w-14 text-2xl"}`}>{playing ? "⏸" : "▶"}</button>
-          <button onClick={() => stepRef.current(1)} aria-label="Next track" className={skip}>⏭</button>
-          {!mobile && <>{shuffleBtn}{queueBtn}</>}
+          <div className={mobile ? "order-last flex w-full items-center justify-center gap-1" : "contents"}>
+            <button onClick={() => stepRef.current(-1)} aria-label="Previous track" className={skip}>⏮</button>
+            <button onClick={() => seekBy(-10)} aria-label="Back 10 seconds" title="Back 10 seconds" className={jump}><Back10Icon className={jumpIcon} /></button>
+            <button onClick={toggle} aria-label={playing ? "Pause" : "Play"}
+              className={`flex shrink-0 items-center justify-center bg-[#c6ff00] text-black hover:bg-white ${mobile ? "h-11 w-11 text-xl" : "h-14 w-14 text-2xl"}`}>{playing ? "⏸" : "▶"}</button>
+            <button onClick={() => seekBy(10)} aria-label="Forward 10 seconds" title="Forward 10 seconds" className={jump}><Forward10Icon className={jumpIcon} /></button>
+            <button onClick={() => stepRef.current(1)} aria-label="Next track" className={skip}>⏭</button>
+            {!mobile && <>{shuffleBtn}{queueBtn}</>}
+          </div>
           {current && current.kind !== "mix" && <PlayerLike key={current.id} trackId={current.id} />}
           <button onClick={close} aria-label="Close player" className={`text-white/40 hover:text-white ${mobile ? "px-1 text-base" : "ml-1 px-2 text-lg"}`}>✕</button>
         </div>

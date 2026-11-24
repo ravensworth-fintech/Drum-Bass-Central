@@ -133,7 +133,7 @@ export function MixesBrowser() {
       )}
       {err && <p className="mb-4 text-red-400">Database error: {err}</p>}
       {mixes.length ? (<>
-        <PlayActions tracks={queue} owner="mixes" />
+        <PlayActions tracks={queue} owner="mixes" hideShuffle />
         <ul className="divide-y divide-white/10">
           {mixes.flatMap((m, i) => {
             const day = dayKey(m.uploaded_at);

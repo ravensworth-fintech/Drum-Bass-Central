@@ -22,4 +22,7 @@ create index if not exists source_suggestions_status on source_suggestions (stat
 -- Same rule as sources: no policies = nobody but the server (service-role key) can read or write it.
 alter table source_suggestions enable row level security;
 
+-- The server talks to Supabase as service_role, which bypasses RLS but still needs the table privilege.
+grant all on table source_suggestions to service_role;
+
 notify pgrst, 'reload schema';

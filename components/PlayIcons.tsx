@@ -17,3 +17,18 @@ export function DiceIcon({ className = "h-5 w-5" }: { className?: string }) {
     </svg>
   );
 }
+
+/** Podcast-style "jump 10 seconds" icons: a circular arrow with 10 inside. */
+function Jump10({ className, forward }: { className: string; forward?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={className} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <g transform={forward ? "translate(24 0) scale(-1 1)" : undefined}>
+        <path d="M9 5h3a8 8 0 1 1-7.4 5" />
+        <path d="M12.5 1.5L9 5l3.5 3.5" />
+      </g>
+      <text x="12" y="16.2" textAnchor="middle" fontSize="7.5" fontWeight="700" fill="currentColor" stroke="none" fontFamily="system-ui, sans-serif">10</text>
+    </svg>
+  );
+}
+export const Back10Icon = ({ className = "h-8 w-8" }: { className?: string }) => <Jump10 className={className} />;
+export const Forward10Icon = ({ className = "h-8 w-8" }: { className?: string }) => <Jump10 className={className} forward />;
